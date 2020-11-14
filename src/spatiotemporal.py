@@ -3,7 +3,7 @@ from sklearn.decomposition import PCA, NMF
 
 
 class SpatioTemporalSynergy:
-    """Spatiotemporal synergies.
+    """Spatio-temporal synergies.
     """
 
     def __init__(self, n_synergies, method="nmf"):
@@ -22,7 +22,7 @@ class SpatioTemporalSynergy:
         self.length = None
 
     def extract(self, data, max_iter=1000):
-        """Extract spatiotemporal synergies from given data.
+        """Extract spatio-temporal synergies from given data.
 
         Data is assumed to have the shape (#data, length, #DoF).
         Synergies have the shape (#synergies, length, #DoF).
@@ -82,7 +82,7 @@ class SpatioTemporalSynergy:
         return data
 
 
-def _example_spatiotemporal():
+def _example():
     """Check synergy extraction code.
     """
     import matplotlib.pyplot as plt
@@ -139,4 +139,4 @@ def _example_spatiotemporal():
 
 
 if __name__ == "__main__":
-    _example_spatiotemporal()
+    _example()
