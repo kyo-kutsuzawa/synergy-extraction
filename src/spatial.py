@@ -92,7 +92,7 @@ class SpatialSynergy:
         return data
 
 
-def _example_spatial():
+def _example():
     """Check synergy extraction code.
     """
     import matplotlib.pyplot as plt
@@ -149,4 +149,4 @@ def _example_spatial():
 
 
 if __name__ == "__main__":
-    _example_spatial()
+    _example()
