@@ -65,3 +65,72 @@ class TimeVaryingSynergy:
         data = np.empty((self.dof, self.data_length))
 
         return data
+
+
+def _generate_example_data(plot=True):
+    """Check example-data generation code.
+    """
+    def gaussian(x, mu, std):
+        return np.exp(-0.5 * (x - mu)**2 / std**2)
+
+    # Setup constants
+    N =  3  # Number of data
+    M =  3  # Number of DoF
+    T = 30  # Time length of data
+    K =  2  # Number of synergies
+    S = 15  # Time length of synergies
+
+    # Generate synergies
+    synergies = np.zeros((K, S, M))
+    for k in range(K):
+        for m in range(M):
+            std = np.random.uniform(S*0.05, S*0.2)
+            margin = int(std * 2)
+            mu = np.random.randint(margin, S-margin)
+            for s in range(S):
+                synergies[k, s, m] = gaussian(s, mu, std)
+
+    # Generate synergy activities (i.e., amplitude and delay)
+    amplitude = np.random.uniform(0, 1, (N, K))
+    delays = np.random.randint(0, T-S, (N, K))
+
+    # Compute a dataset from the synergies and activities
+    data = np.zeros((N, T, M))
+    for n in range(N):
+        for k in range(K):
+            ts = delays[n, k]
+            data[n, ts:ts+S, :] += amplitude[n, k] * synergies[k, :, :]
+
+    # Plot results if specified
+    if plot:
+        import matplotlib.pyplot as plt
+
+        # Plot synergy components
+        fig = plt.figure()
+        fig.suptitle("Synergy components")
+        for k in range(K):
+            for m in range(M):
+                ax = fig.add_subplot(M, K, m*K+k+1)
+                ax.plot(np.arange(synergies.shape[1]), synergies[k, :, m])
+                ax.set_xlim((0, synergies.shape[1]-1))
+                if k == 0:
+                    ax.set_ylabel("DoF #{}".format(m+1))
+            ax.set_xlabel("synergy #{}".format(k+1))
+        fig.tight_layout(rect=[0, 0, 1, 0.96])
+
+        # Plot reconstruction data
+        fig = plt.figure()
+        fig.suptitle("Original data")
+        axes = [fig.add_subplot(M, 1, m+1) for m in range(M)]
+        for n in range(N):
+            for m, ax in enumerate(axes):
+                ax.plot(np.arange(data.shape[1]), data[n, :, m], "--", lw=2, color=plt.get_cmap("viridis")((N-n)/(N+1)))
+                ax.set_xlim((0, data.shape[1]-1))
+                ax.set_ylabel("DoF #{}".format(m+1))
+        fig.tight_layout(rect=[0, 0, 1, 0.96])
+
+        plt.show()
+
+
+if __name__ == "__main__":
+    _generate_example_data()
