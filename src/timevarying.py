@@ -67,18 +67,17 @@ class TimeVaryingSynergy:
         return data
 
 
-def _generate_example_data(plot=True):
+def _generate_example_data(N=3, M=3, T=30, K=2, S=15, plot=True):
     """Check example-data generation code.
+
+    N: Number of data
+    M: Number of DoF
+    T: Time length of data
+    K: Number of synergies
+    S: Time length of synergies
     """
     def gaussian(x, mu, std):
         return np.exp(-0.5 * (x - mu)**2 / std**2)
-
-    # Setup constants
-    N =  3  # Number of data
-    M =  3  # Number of DoF
-    T = 30  # Time length of data
-    K =  2  # Number of synergies
-    S = 15  # Time length of synergies
 
     # Generate synergies
     synergies = np.zeros((K, S, M))
@@ -130,6 +129,8 @@ def _generate_example_data(plot=True):
         fig.tight_layout(rect=[0, 0, 1, 0.96])
 
         plt.show()
+
+    return data, synergies, (amplitude, delays)
 
 
 if __name__ == "__main__":
