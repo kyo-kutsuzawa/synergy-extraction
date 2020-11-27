@@ -67,6 +67,61 @@ class TimeVaryingSynergy:
         return data
 
 
+def _example():
+    """Check synergy extraction code.
+    """
+    import matplotlib.pyplot as plt
+
+    # Setup constants
+    N =  3  # Number of data
+    M =  3  # Number of DoF
+    T = 30  # Time length of data
+    K =  2  # Number of synergies
+    S = 15  # Time length of synergies
+
+    # Create a dataset with shape (N, T, M)
+    data, synergies, (amplitude, delays) = _generate_example_data(N, M, T, K, S, plot=False)
+    data += np.random.normal(0, 0.1, size=data.shape)  # Add Gaussian noise
+
+    # Get synergies
+    model = TimeVaryingSynergy(K, S)
+    model.extract(data)
+
+    # Reconstruct actions
+    data_est = np.empty_like(data)
+    for n in range(N):
+        c = model.encode(data[n])
+        d = model.decode(c)
+        data_est[n] = d
+
+    # Plot synergy components
+    fig = plt.figure()
+    fig.suptitle("Synergy components")
+    for k in range(K):
+        for m in range(M):
+            ax = fig.add_subplot(M, K, m*K+k+1)
+            ax.plot(np.arange(model.synergies.shape[1]), model.synergies[k, :, m])
+            ax.set_xlim((0, model.synergies.shape[1]-1))
+            if k == 0:
+                ax.set_ylabel("DoF #{}".format(m+1))
+        ax.set_xlabel("synergy #{}".format(k+1))
+    fig.tight_layout(rect=[0, 0, 1, 0.96])
+
+    # Plot reconstruction data
+    fig = plt.figure()
+    fig.suptitle("Original/Reconstruction data")
+    axes = [fig.add_subplot(M, 1, m+1) for m in range(M)]
+    for n in range(N):
+        for m, ax in enumerate(axes):
+            ax.plot(np.arange(data.shape[1]), data[n, :, m], "--", lw=2, color=plt.get_cmap("viridis")((N-n)/(N+1)))
+            ax.plot(np.arange(data.shape[1]), data_est[n, :, m],   lw=1, color=plt.get_cmap("viridis")((N-n)/(N+1)))
+            ax.set_xlim((0, data.shape[1]-1))
+            ax.set_ylabel("DoF #{}".format(m+1))
+    fig.tight_layout(rect=[0, 0, 1, 0.96])
+
+    plt.show()
+
+
 def _generate_example_data(N=3, M=3, T=30, K=2, S=15, plot=True):
     """Check example-data generation code.
 
@@ -134,4 +189,4 @@ def _generate_example_data(N=3, M=3, T=30, K=2, S=15, plot=True):
 
 
 if __name__ == "__main__":
-    _generate_example_data()
+    _example()
