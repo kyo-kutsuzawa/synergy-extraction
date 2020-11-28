@@ -111,6 +111,29 @@ def update_delays(data, synergies):
     return delays
 
 
+def update_amplitude(data, synergies, amplitude, delays):
+    """Find the amplitude (scale coefficient).
+
+    The algorithm is based on [d'Avella et al., 2003].
+    """
+    # Compute shifted synergies (correspond to W Theta[t_s]) and shifted and scaled synergies (correspond to W H_s)
+    shifted_synergies = np.zeros_like(data)
+    shifted_scaled_synergies = np.zeros_like(data)
+    for n in range(data.shape[0]):
+        for k in range(synergies.shape[0]):
+            ts = delays[n, k]
+            shifted_synergies[n, ts:ts+synergies.shape[1], :] += synergies[k, :, :]
+            shifted_scaled_synergies[n, ts:ts+synergies.shape[1], :] += synergies[k, :, :] * amplitude[n, k]
+
+    # Update the amplitude
+    for n in range(data.shape[0]):
+        N = np.dot(data[n].T, shifted_synergies[n])
+        D = np.dot(shifted_scaled_synergies[n].T, shifted_synergies[n])
+        amplitude[n, :] = amplitude[n, :] * np.trace(N) / np.trace(D)
+
+    return amplitude
+
+
 def _example_update_delays():
     import matplotlib.pyplot as plt
 
@@ -138,6 +161,62 @@ def _example_update_delays():
         for k in range(K):
             ts = delays_est[n, k]
             data_est[n, ts:ts+S, :] += amplitude[n, k] * synergies[k, :, :]
+
+    # Plot synergy components
+    fig = plt.figure()
+    fig.suptitle("Synergy components")
+    for k in range(K):
+        for m in range(M):
+            ax = fig.add_subplot(M, K, m*K+k+1)
+            ax.plot(np.arange(synergies.shape[1]), synergies[k, :, m])
+            ax.set_xlim((0, synergies.shape[1]-1))
+            if k == 0:
+                ax.set_ylabel("DoF #{}".format(m+1))
+        ax.set_xlabel("synergy #{}".format(k+1))
+    fig.tight_layout(rect=[0, 0, 1, 0.96])
+
+    # Plot reconstruction data
+    fig = plt.figure()
+    fig.suptitle("Original/Reconstruction data")
+    axes = [fig.add_subplot(M, 1, m+1) for m in range(M)]
+    for n in range(N):
+        for m, ax in enumerate(axes):
+            ax.plot(np.arange(data.shape[1]), data[n, :, m], "--", lw=2, color=plt.get_cmap("viridis")((N-n)/(N+1)))
+            ax.plot(np.arange(data.shape[1]), data_est[n, :, m],   lw=1, color=plt.get_cmap("viridis")((N-n)/(N+1)))
+            ax.set_xlim((0, data.shape[1]-1))
+            ax.set_ylabel("DoF #{}".format(m+1))
+    fig.tight_layout(rect=[0, 0, 1, 0.96])
+
+    plt.show()
+
+
+def _example_update_amplitude():
+    import matplotlib.pyplot as plt
+
+    # Setup constants
+    N =  3  # Number of data
+    M =  3  # Number of DoF
+    T = 30  # Time length of data
+    K =  2  # Number of synergies
+    S = 15  # Time length of synergies
+
+    # Create a dataset with shape (N, T, M)
+    data, synergies, (amplitude, delays) = _generate_example_data(N, M, T, K, S, plot=False)
+
+    # Estimate delays
+    amplitude_est = update_amplitude(data, synergies, amplitude, delays)
+
+    # Print the results
+    print("Actual:\n", amplitude)
+    print("Expect:\n", amplitude_est)
+    print("Residual:\n", amplitude - amplitude_est)
+
+    # Reconstruct the data
+    data_est = np.zeros_like(data)
+    for n in range(N):
+        for k in range(K):
+            ts = delays[n, k]
+            data_est[n, ts:ts+S, :] += amplitude_est[n, k] * synergies[k, :, :]
 
     # Plot synergy components
     fig = plt.figure()
