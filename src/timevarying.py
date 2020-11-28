@@ -67,7 +67,7 @@ class TimeVaryingSynergy:
         return data
 
 
-def update_delays(synergies, amplitude, data):
+def update_delays(data, synergies):
     """Find the delays using a nested matching procedure based on the cross-correlation.
 
     The algorithm is based on [d'Avella et al., 2002].
@@ -125,7 +125,7 @@ def _example_update_delays():
     data, synergies, (amplitude, delays) = _generate_example_data(N, M, T, K, S, plot=False)
 
     # Estimate delays
-    delays_est = update_delays(synergies, amplitude, data)
+    delays_est = update_delays(data, synergies)
 
     # Print the results
     print("Actual:\n", delays)
