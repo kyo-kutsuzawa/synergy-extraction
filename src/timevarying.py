@@ -203,7 +203,7 @@ def _example_update_amplitude():
     # Create a dataset with shape (N, T, M)
     data, synergies, (amplitude, delays) = _generate_example_data(N, M, T, K, S, plot=False)
 
-    # Estimate delays
+    # Estimate amplitude
     amplitude_est = update_amplitude(data, synergies, amplitude, delays)
 
     # Print the results
