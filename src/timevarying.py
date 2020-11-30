@@ -20,7 +20,7 @@ class TimeVaryingSynergy:
         self.dof = None
         self.data_length = None
 
-    def extract(self, data, max_iter=1000):
+    def extract(self, data, max_iter=10000):
         """Extract time-varying synergies from given data.
 
         Data is assumed to have the shape (#data, data-length, #DoF).
@@ -28,9 +28,15 @@ class TimeVaryingSynergy:
         """
         # Get shape information
         self.dof = data.shape[2]
+        self.data_length = data.shape[1]
 
-        # Not implemented
-        self.synergies = np.empty((self.n_synergies, self.synergy_length, self.dof))
+        self.synergies = np.random.uniform(0.1, 1, (self.n_synergies, self.synergy_length, self.dof))
+        amplitude      = np.random.uniform(0.1, 1, (data.shape[0], self.n_synergies))
+
+        for i in range(max_iter):
+            delays = update_delays(data, self.synergies)
+            amplitude = update_amplitude(data, self.synergies, amplitude, delays)
+            self.synergies = update_synergies(data, self.synergies, amplitude, delays, eps=1e-9)
 
         return self.synergies
 
@@ -62,7 +68,7 @@ class TimeVaryingSynergy:
             return None
 
         # Not implemented
-        data = np.empty((self.dof, self.data_length))
+        data = np.empty((activities[0].shape[0], self.data_length, self.dof))
 
         return data
 
@@ -129,7 +135,8 @@ def update_amplitude(data, synergies, amplitude, delays):
     for n in range(data.shape[0]):
         N = np.dot(data[n].T, shifted_synergies[n])
         D = np.dot(shifted_scaled_synergies[n].T, shifted_synergies[n])
-        amplitude[n, :] = amplitude[n, :] * np.trace(N) / np.trace(D)
+        #amplitude[n, :] = amplitude[n, :] * np.trace(N) / np.trace(D)
+        amplitude[n, :] = amplitude[n, :] + 0.001 * (np.trace(N) - np.trace(D))
 
     return amplitude
 
@@ -140,28 +147,38 @@ def update_synergies(data, synergies, amplitude, delays, eps=1e-9):
     The algorithm is based on [d'Avella et al., 2003].
     Note that the shape setup is different to the original paper due to implementation consistency.
     """
+    n_data = data.shape[0]
+    data_length = data.shape[1]
+    n_synergies = synergies.shape[0]
     synergy_length = synergies.shape[1]
+    n_dof = synergies.shape[2]
 
     # Compute the scale and shift matrix (correspond to H) and shifted and scaled synergies (correspond to W H)
-    H = np.zeros((data.shape[0], data.shape[1], synergies.shape[0], synergies.shape[1]))
-    WH = np.zeros_like(data)
-    for n in range(data.shape[0]):
-        for k in range(synergies.shape[0]):
+    H = np.zeros((n_synergies, synergy_length, n_data, data_length))
+    WH = np.zeros((n_dof, n_data, data_length))
+    for n in range(n_data):
+        for k in range(n_synergies):
             ts = delays[n, k]
             for i in range(synergy_length):
-                H[n, ts:ts+i, k, i] = amplitude[n, k]
-            WH[n, ts:ts+synergies.shape[1], :] += synergies[k, :, :] * amplitude[n, k]
+                H[k, i, n, ts+i] = amplitude[n, k]
+                WH[:, n, ts+i] += synergies[k, i, :] * amplitude[n, k]
 
     # Reshape matrices
-    data = data.reshape((-1, data.shape[2]))  # shape: (#data * length, #DoF)
-    H = H.reshape((H.shape[0]*H.shape[1], H.shape[2]*H.shape[3]))  # shape: (#data * length, #synergies * synergy-length)
-    WH = WH.reshape(data.shape)  # shape: (#data * length, #DoF)
+    data = np.transpose(data, (2, 0, 1))  # shape: (#DoF, #data, length)
+    data = data.reshape((n_dof, n_data*data_length))  # shape: (#DoF, #data * length)
+    synergies = np.transpose(synergies, (2, 0, 1))  # shape: (#DoF, #synergies, synergy-length)
+    synergies = synergies.reshape((n_dof, n_synergies*synergy_length))  # shape: (#DoF, #synergies * synergy-length)
+    H = H.reshape((n_synergies * synergy_length, n_data * data_length))  # shape: (#synergies * synergy-length, #data * length)
+    WH = WH.reshape((n_dof, n_data*data_length))  # shape: (#DoF, #data * length)
 
     # Update synergies
-    N = np.dot(H.T, data)
-    D = np.dot(H.T, WH)
-    scale = N / (D + eps)
-    synergies = synergies * scale.reshape(synergies.shape)
+    N = np.dot(data, H.T)
+    D = np.dot(WH, H.T)
+    #synergies = synergies * N / (D + eps)
+    synergies = synergies + 0.001 * (N - D)
+
+    synergies = synergies.reshape((n_dof, n_synergies, synergy_length))  # shape: (#DoF, #synergies, synergy-length)
+    synergies = np.transpose(synergies, (1, 2, 0))  # shape: (#synergies, synergy-length, #DoF)
 
     return synergies
 
@@ -170,7 +187,7 @@ def _example_update_delays():
     import matplotlib.pyplot as plt
 
     # Setup constants
-    N =  3  # Number of data
+    N = 10  # Number of data
     M =  3  # Number of DoF
     T = 30  # Time length of data
     K =  2  # Number of synergies
@@ -226,7 +243,7 @@ def _example_update_amplitude():
     import matplotlib.pyplot as plt
 
     # Setup constants
-    N =  3  # Number of data
+    N = 10  # Number of data
     M =  3  # Number of DoF
     T = 30  # Time length of data
     K =  2  # Number of synergies
@@ -236,7 +253,9 @@ def _example_update_amplitude():
     data, synergies, (amplitude, delays) = _generate_example_data(N, M, T, K, S, plot=False)
 
     # Estimate amplitude
-    amplitude_est = update_amplitude(data, synergies, amplitude, delays)
+    amplitude_est = np.random.uniform(0, 1, amplitude.shape)
+    for _ in range(10000):
+        amplitude_est = update_amplitude(data, synergies, amplitude_est, delays)
 
     # Print the results
     print("Actual:\n", amplitude)
@@ -282,7 +301,7 @@ def _example_update_synergies():
     import matplotlib.pyplot as plt
 
     # Setup constants
-    N =  3  # Number of data
+    N = 10  # Number of data
     M =  3  # Number of DoF
     T = 30  # Time length of data
     K =  2  # Number of synergies
@@ -292,7 +311,9 @@ def _example_update_synergies():
     data, synergies, (amplitude, delays) = _generate_example_data(N, M, T, K, S, plot=False)
 
     # Estimate synergies
-    synergies_est = update_synergies(data, synergies, amplitude, delays)
+    synergies_est = np.random.uniform(0, 1, synergies.shape)
+    for _ in range(10000):
+        synergies_est = update_synergies(data, synergies_est, amplitude, delays)
 
     # Print the results
     print("Actual:\n", synergies)
@@ -312,7 +333,8 @@ def _example_update_synergies():
     for k in range(K):
         for m in range(M):
             ax = fig.add_subplot(M, K, m*K+k+1)
-            ax.plot(np.arange(synergies.shape[1]), synergies[k, :, m])
+            ax.plot(np.arange(synergies.shape[1]), synergies[k, :, m], "--", lw=2)
+            ax.plot(np.arange(synergies.shape[1]), synergies_est[k, :, m], lw=1)
             ax.set_xlim((0, synergies.shape[1]-1))
             if k == 0:
                 ax.set_ylabel("DoF #{}".format(m+1))
@@ -340,7 +362,7 @@ def _example():
     import matplotlib.pyplot as plt
 
     # Setup constants
-    N =  3  # Number of data
+    N = 10  # Number of data
     M =  3  # Number of DoF
     T = 30  # Time length of data
     K =  2  # Number of synergies
@@ -348,7 +370,7 @@ def _example():
 
     # Create a dataset with shape (N, T, M)
     data, synergies, (amplitude, delays) = _generate_example_data(N, M, T, K, S, plot=False)
-    data += np.random.normal(0, 0.1, size=data.shape)  # Add Gaussian noise
+    #data += abs(np.random.normal(0, 0.1, size=data.shape))  # Add Gaussian noise
 
     # Get synergies
     model = TimeVaryingSynergy(K, S)
@@ -356,10 +378,8 @@ def _example():
 
     # Reconstruct actions
     data_est = np.empty_like(data)
-    for n in range(N):
-        c = model.encode(data[n])
-        d = model.decode(c)
-        data_est[n] = d
+    activities = model.encode(data)
+    data_est = model.decode(activities)
 
     # Plot synergy components
     fig = plt.figure()
@@ -367,7 +387,8 @@ def _example():
     for k in range(K):
         for m in range(M):
             ax = fig.add_subplot(M, K, m*K+k+1)
-            ax.plot(np.arange(model.synergies.shape[1]), model.synergies[k, :, m])
+            ax.plot(np.arange(synergies.shape[1]), synergies[k, :, m], "--", lw=2)
+            ax.plot(np.arange(model.synergies.shape[1]), model.synergies[k, :, m], lw=1)
             ax.set_xlim((0, model.synergies.shape[1]-1))
             if k == 0:
                 ax.set_ylabel("DoF #{}".format(m+1))
@@ -456,4 +477,7 @@ def _generate_example_data(N=3, M=3, T=30, K=2, S=15, plot=True):
 
 
 if __name__ == "__main__":
+    _example_update_delays()
+    _example_update_amplitude()
+    _example_update_synergies()
     _example()
