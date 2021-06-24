@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
 from spatial import SpatialSynergy
 
 
@@ -11,7 +12,7 @@ def example():
     K =  2  # Number of synergies
 
     # Create a dataset with shape (N, T, M)
-    data, synergies, _ = generate_data(N, T, M, K, noise=0.1)
+    data = generate_data(N, T, M, K, noise=0.1)
     print("Data shape    :", data.shape)
 
     # Extract synergies
@@ -25,39 +26,31 @@ def example():
     print("Activity shape:", activities.shape)
 
     # Create a figure
-    fig = plt.figure(figsize=(6, 6))
+    fig = plt.figure(figsize=(12, 6), constrained_layout=True)
+    gs_master = GridSpec(nrows=1, ncols=2, figure=fig, width_ratios=[2, 1])
 
     # Plot reconstruction data
-    ax = fig.add_subplot(2, 1, 1)
-    ax.set_xticks([])
-    ax.set_yticks([])
-    ax.spines['right'].set_visible(False)
-    ax.spines['top'].set_visible(False)
-    ax.spines['bottom'].set_visible(False)
-    ax.spines['left'].set_visible(False)
-    ax.set_title("Original/Reconstruction data")
-    M_col = np.ceil(np.sqrt(M))
-    M_row = np.ceil(M/M_col)
-    axes = [fig.add_subplot(M_row*2, M_col, m+1) for m in range(M)]
+    M_col = int(np.ceil(np.sqrt(M)))
+    M_row = int(np.ceil(M/M_col))
+    gs_1 = GridSpecFromSubplotSpec(nrows=M_row, ncols=M_col, subplot_spec=gs_master[0, 0])
+    axes = [fig.add_subplot(gs_1[int(np.floor(m/M_col)), m%M_col]) for m in range(M)]
     for n in range(N):
         for m, ax in enumerate(axes):
             ax.plot(np.arange(data.shape[1]), data[n, :, m], "--", lw=2, color="C{}".format(n))
             ax.plot(np.arange(data.shape[1]), data_est[n, :, m],   lw=1, color="C{}".format(n))
             ax.set_xlim((0, data.shape[1]-1))
-            ax.set_ylabel("DoF #{}".format(m+1))
+            ax.set_title("DoF #{}".format(m+1))
 
     # Plot synergy components
-    ax = fig.add_subplot(2, 1, 2)
+    gs_2 = GridSpecFromSubplotSpec(nrows=M_row, ncols=M_col, subplot_spec=gs_master[0, 1])
+    ax = fig.add_subplot(gs_2[:, :])
     ax.set_title("Synergy components")
     for k in range(K):
         x = np.linspace(-0.5, 0.5, M+2)[1:-1] + k
         ax.bar(x, model.synergies[k, :], width=0.95/(M+1), linewidth=0, align='center', color="C{}".format(k))
-        ax.bar(x, synergies[k, :],       width=0.25/(M+1), linewidth=0, align='center', color="gray")
     ax.set_xticks(list(range(K)))
     ax.set_xticklabels(["synergy #{}".format(k+1) for k in range(K)])
 
-    #fig.tight_layout(rect=[0, 0, 1, 0.96])
-    fig.tight_layout()
     plt.show()
 
 
@@ -68,7 +61,7 @@ def generate_data(N, T, M, K, noise=0.0):
 
     data += np.random.normal(0, noise, size=data.shape)  # Add Gaussian noise
 
-    return data, synergies, activities
+    return data
 
 
 if __name__ == "__main__":
