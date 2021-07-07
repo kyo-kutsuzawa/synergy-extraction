@@ -67,8 +67,14 @@ class TimeVaryingSynergy:
         if self.synergies is None:
             return None
 
-        # Not implemented
-        data = np.empty((activities[0].shape[0], self.data_length, self.dof))
+        # Reconstruct data
+        amplitude, delays = activities
+        data = np.zeros((activities[0].shape[0], self.data_length, self.dof))
+        for n in range(data.shape[0]):
+            for k in range(self.n_synergies):
+                c = amplitude[n, k]
+                ts = delays[n, k]
+                data[n, ts:ts+self.synergy_length, :] += c * self.synergies[k, :, :]
 
         return data
 
