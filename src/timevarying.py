@@ -149,43 +149,23 @@ def update_amplitude(data, synergies, amplitude, delays, mu=0.001):
     return amplitude
 
 
-def update_synergies(data, synergies, amplitude, delays, eps=1e-9):
+def update_synergies(data, synergies, amplitude, delays, mu=0.001):
     """Find synergies.
 
-    The algorithm is based on [d'Avella et al., 2003].
-    Note that the shape setup is different to the original paper due to implementation consistency.
+    The algorithm is based on [d'Avella and Tresch, 2002].
     """
-    n_data = data.shape[0]
-    data_length = data.shape[1]
-    n_synergies = synergies.shape[0]
-    synergy_length = synergies.shape[1]
-    n_dof = synergies.shape[2]
-
-    # Compute the scale and shift matrix (correspond to H) and shifted and scaled synergies (correspond to W H)
-    H = np.zeros((n_synergies, synergy_length, n_data, data_length))
-    WH = np.zeros((n_dof, n_data, data_length))
-    for n in range(n_data):
-        for k in range(n_synergies):
+    # Compute the gradient
+    grad = np.zeros_like(synergies)
+    for k in range(synergies.shape[0]):
+        for n in range(data.shape[0]):
             ts = delays[n, k]
-            for i in range(synergy_length):
-                H[k, i, n, ts+i] = amplitude[n, k]
-                WH[:, n, ts+i] += synergies[k, i, :] * amplitude[n, k]
+            grad[k, :, :] += (data[n, ts:ts+synergies.shape[1], :] - synergies[k, :, :] * amplitude[n, k]) * amplitude[n, k]
 
-    # Reshape matrices
-    data = np.transpose(data, (2, 0, 1))  # shape: (#DoF, #data, length)
-    data = data.reshape((n_dof, n_data*data_length))  # shape: (#DoF, #data * length)
-    synergies = np.transpose(synergies, (2, 0, 1))  # shape: (#DoF, #synergies, synergy-length)
-    synergies = synergies.reshape((n_dof, n_synergies*synergy_length))  # shape: (#DoF, #synergies * synergy-length)
-    H = H.reshape((n_synergies * synergy_length, n_data * data_length))  # shape: (#synergies * synergy-length, #data * length)
-    WH = WH.reshape((n_dof, n_data*data_length))  # shape: (#DoF, #data * length)
+    # Compute the gradient
+    grad = grad * -2
 
-    # Update synergies
-    N = np.dot(data, H.T)
-    D = np.dot(WH, H.T)
-    #synergies = synergies * N / (D + eps)
-    synergies = synergies + 0.001 * (N - D)
-
-    synergies = synergies.reshape((n_dof, n_synergies, synergy_length))  # shape: (#DoF, #synergies, synergy-length)
-    synergies = np.transpose(synergies, (1, 2, 0))  # shape: (#synergies, synergy-length, #DoF)
+    # Update the amplitude
+    synergies = synergies - mu * grad
+    synergies = np.clip(synergies, 0.0, None)  # Limit to non-negative values
 
     return synergies
