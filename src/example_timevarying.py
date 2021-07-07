@@ -191,7 +191,8 @@ def example_update_amplitude():
     T = 150  # Time length of data
     K =   2  # Number of synergies
     S =  50  # Time length of synergies
-    n_iter = 1000
+    n_iter = 200
+    mu = 5e-3
 
     # Create a dataset with shape (N, T, M)
     data, synergies, (amplitude, delays) = generate_example_data(N, M, T, K, S, plot=False)
@@ -199,7 +200,7 @@ def example_update_amplitude():
     # Estimate amplitude
     amplitude_est = np.random.uniform(0, 1, amplitude.shape)
     for _ in range(n_iter):
-        amplitude_est = update_amplitude(data, synergies, amplitude_est, delays)
+        amplitude_est = update_amplitude(data, synergies, amplitude_est, delays, mu)
 
     # Print the results
     print("Actual:\n", amplitude)

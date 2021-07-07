@@ -124,26 +124,27 @@ def update_delays(data, synergies):
     return delays
 
 
-def update_amplitude(data, synergies, amplitude, delays):
+def update_amplitude(data, synergies, amplitude, delays, mu=0.001):
     """Find the amplitude (scale coefficient).
 
-    The algorithm is based on [d'Avella et al., 2003].
+    The algorithm is based on [d'Avella and Tresch, 2002].
     """
-    # Compute shifted synergies (correspond to W Theta[t_s]) and shifted and scaled synergies (correspond to W H_s)
-    shifted_synergies = np.zeros_like(data)
-    shifted_scaled_synergies = np.zeros_like(data)
+    # Compute shifted synergies and reconstruction data
+    shifted_synergies = np.zeros((data.shape[0], data.shape[1], data.shape[2], synergies.shape[0]))
+    data_est = np.zeros_like(data)
     for n in range(data.shape[0]):
         for k in range(synergies.shape[0]):
             ts = delays[n, k]
-            shifted_synergies[n, ts:ts+synergies.shape[1], :] += synergies[k, :, :]
-            shifted_scaled_synergies[n, ts:ts+synergies.shape[1], :] += synergies[k, :, :] * amplitude[n, k]
+            shifted_synergies[n, ts:ts+synergies.shape[1], :, k] += synergies[k, :, :]
+            data_est[n, ts:ts+synergies.shape[1], :] += synergies[k, :, :] * amplitude[n, k]
+
+    # Compute the gradient
+    grad = np.einsum("ntm,ntmk->ntk", data - data_est, shifted_synergies)
+    grad = -2 * np.sum(grad, axis=1)
 
     # Update the amplitude
-    for n in range(data.shape[0]):
-        N = np.dot(data[n].T, shifted_synergies[n])
-        D = np.dot(shifted_scaled_synergies[n].T, shifted_synergies[n])
-        #amplitude[n, :] = amplitude[n, :] * np.trace(N) / np.trace(D)
-        amplitude[n, :] = amplitude[n, :] + 0.001 * (np.trace(N) - np.trace(D))
+    amplitude = amplitude - mu * grad
+    amplitude = np.clip(amplitude, 0.0, None)  # Limit to non-negative values
 
     return amplitude
 
