@@ -101,7 +101,8 @@ def update_delays(data, synergies):
             corrs = []
             for k in range(n_synergies):
                 # Initialize the cross-correlation between the n-th data and k-th synergy.
-                # Note that the minimum possible value is zero.
+                # Note that the minimum possible value is zero;
+                # Default values are -1 so as to the previously-selected synergy is never selected again.
                 corr = -np.ones((data_length-synergy_length+1,))
 
                 # Compute the cross-correlation if its delay has not been found yet
