@@ -1,18 +1,19 @@
 import numpy as np
-from sklearn.decomposition import NMF
+import tqdm
 
 
 class TimeVaryingSynergy:
     """Time-varying synergies.
     """
 
-    def __init__(self, n_synergies, synergy_length):
+    def __init__(self, n_synergies, synergy_length, containing_negative_values=False):
         """
         Args:
             n_synergies: Number of synergies
         """
         self.n_synergies = n_synergies
         self.synergy_length = synergy_length
+        self.containing_negative_values = containing_negative_values
 
         # Initialize variables
         self.model = None
@@ -30,13 +31,18 @@ class TimeVaryingSynergy:
         self.dof = data.shape[2]
         self.data_length = data.shape[1]
 
+        # Convert the data to non-negative signals
+        if self.containing_negative_values:
+            data = transform_nonnegative(data)
+            self.dof = data.shape[2]  # Update the number of DoF
+
         self.synergies = np.random.uniform(0.1, 1, (self.n_synergies, self.synergy_length, self.dof))
         amplitude      = np.random.uniform(0.1, 1, (data.shape[0], self.n_synergies))
 
-        for i in range(max_iter):
+        for i in tqdm.tqdm(range(max_iter)):
             delays = update_delays(data, self.synergies)
             amplitude = update_amplitude(data, self.synergies, amplitude, delays)
-            self.synergies = update_synergies(data, self.synergies, amplitude, delays, eps=1e-9)
+            self.synergies = update_synergies(data, self.synergies, amplitude, delays)
 
         return self.synergies
 
@@ -50,9 +56,15 @@ class TimeVaryingSynergy:
         if self.synergies is None:
             return None
 
-        # Not implemented
+        # Convert the data to non-negative signals
+        if self.containing_negative_values:
+            data = transform_nonnegative(data)
+
+        # Encode the data
         amplitude = np.empty((data.shape[0], self.n_synergies))
-        delays = np.empty((data.shape[0], self.n_synergies))
+        for i in range(max_iter):
+            delays = update_delays(data, self.synergies)
+            amplitude = update_amplitude(data, self.synergies, amplitude, delays)
         activities = (amplitude, delays)
 
         return activities
@@ -75,6 +87,10 @@ class TimeVaryingSynergy:
                 c = amplitude[n, k]
                 ts = delays[n, k]
                 data[n, ts:ts+self.synergy_length, :] += c * self.synergies[k, :, :]
+
+        # Convert non-negative signals backwards
+        if self.containing_negative_values:
+            data = inverse_transform_nonnegative(data)
 
         return data
 
@@ -169,3 +185,32 @@ def update_synergies(data, synergies, amplitude, delays, mu=0.001):
     synergies = np.clip(synergies, 0.0, None)  # Limit to non-negative values
 
     return synergies
+
+
+def transform_nonnegative(data):
+    """Convert a data that has negative values to non-negative signals with doubled dimensions.
+    Data is assumed to have the shape (#trajectories, length, #DoF).
+    Converted non-negative data have the shape (#trajectories, length, 2 * #DoF).
+    """
+    n_dof = data.shape[2]  # Dimensionality of the original data
+
+    # Convert the data to non-negative signals
+    data_nn = np.empty((data.shape[0], data.shape[1], n_dof*2))
+    data_nn[:, :, :n_dof] = +np.maximum(data, 0.0)
+    data_nn[:, :, n_dof:] = -np.minimum(data, 0.0)
+
+    return data_nn
+
+
+def inverse_transform_nonnegative(data):
+    """Inverse conversion of `transform_nonnegative()`; Convert non-negative signals to a data that has negative values.
+    Non-negative data is assumed to have the shape (#trajectories, length, 2 * #DoF).
+    Reconstructed data have the shape (#trajectories, length, #DoF).
+    """
+    n_dof = int(data.shape[2] / 2)  # Dimensionality of the original data
+
+    # Restore the original data
+    data_rc = np.empty((data.shape[0], data.shape[1], n_dof))
+    data_rc = data[:, :, :n_dof] - data[:, :, n_dof:]
+
+    return data_rc
