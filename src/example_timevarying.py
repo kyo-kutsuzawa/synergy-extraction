@@ -11,11 +11,11 @@ def example():
     import matplotlib.pyplot as plt
 
     # Setup constants
-    N = 10  # Number of data
-    M =  3  # Number of DoF
-    T = 30  # Time length of data
-    K =  2  # Number of synergies
-    S = 15  # Time length of synergies
+    N =  10  # Number of data
+    M =   3  # Number of DoF
+    T = 150  # Time length of data
+    K =   2  # Number of synergies
+    S =  50  # Time length of synergies
     max_iter = 10000
 
     # Create a dataset with shape (N, T, M)
@@ -130,11 +130,11 @@ def example_update_delays():
     import matplotlib.pyplot as plt
 
     # Setup constants
-    N = 10  # Number of data
-    M =  3  # Number of DoF
-    T = 30  # Time length of data
-    K =  2  # Number of synergies
-    S = 15  # Time length of synergies
+    N =  10  # Number of data
+    M =   3  # Number of DoF
+    T = 150  # Time length of data
+    K =   2  # Number of synergies
+    S =  50  # Time length of synergies
 
     # Create a dataset with shape (N, T, M)
     data, synergies, (amplitude, delays) = generate_example_data(N, M, T, K, S, plot=False)
@@ -154,30 +154,30 @@ def example_update_delays():
             ts = delays_est[n, k]
             data_est[n, ts:ts+S, :] += amplitude[n, k] * synergies[k, :, :]
 
-    # Plot synergy components
-    fig = plt.figure()
-    fig.suptitle("Synergy components")
-    for k in range(K):
-        for m in range(M):
-            ax = fig.add_subplot(M, K, m*K+k+1)
-            ax.plot(np.arange(synergies.shape[1]), synergies[k, :, m])
-            ax.set_xlim((0, synergies.shape[1]-1))
-            if k == 0:
-                ax.set_ylabel("DoF #{}".format(m+1))
-        ax.set_xlabel("synergy #{}".format(k+1))
-    fig.tight_layout(rect=[0, 0, 1, 0.96])
+    # Create a figure
+    fig = plt.figure(figsize=(12, 6), constrained_layout=True)
+    gs_master = GridSpec(nrows=1, ncols=2, figure=fig, width_ratios=[2, 1])
 
     # Plot reconstruction data
-    fig = plt.figure()
-    fig.suptitle("Original/Reconstruction data")
-    axes = [fig.add_subplot(M, 1, m+1) for m in range(M)]
+    M_col = int(np.ceil(np.sqrt(M)))
+    M_row = int(np.ceil(M/M_col))
+    gs_1 = GridSpecFromSubplotSpec(nrows=M_row, ncols=M_col, subplot_spec=gs_master[0, 0])
+    axes = [fig.add_subplot(gs_1[int(np.floor(m/M_col)), m%M_col]) for m in range(M)]
     for n in range(N):
         for m, ax in enumerate(axes):
-            ax.plot(np.arange(data.shape[1]), data[n, :, m], "--", lw=2, color=plt.get_cmap("viridis")((N-n)/(N+1)))
-            ax.plot(np.arange(data.shape[1]), data_est[n, :, m],   lw=1, color=plt.get_cmap("viridis")((N-n)/(N+1)))
+            ax.set_title("DoF #{}".format(m+1))
+            ax.plot(np.arange(data.shape[1]), data[n, :, m], "--", color="C{}".format(n))
+            ax.plot(np.arange(data.shape[1]), data_est[n, :, m], color="C{}".format(n))
             ax.set_xlim((0, data.shape[1]-1))
-            ax.set_ylabel("DoF #{}".format(m+1))
-    fig.tight_layout(rect=[0, 0, 1, 0.96])
+
+    # Plot synergy components
+    gs_2 = GridSpecFromSubplotSpec(nrows=K, ncols=1, subplot_spec=gs_master[0, 1])
+    for k in range(K):
+        ax = fig.add_subplot(gs_2[k, :])
+        ax.set_title("synergy #{}".format(k+1))
+        for m in range(M):
+            ax.plot(np.arange(synergies.shape[1]), synergies[k, :, m], color="C{}".format(m))
+        ax.set_xlim((0, synergies.shape[1]-1))
 
     plt.show()
 
@@ -186,19 +186,21 @@ def example_update_amplitude():
     import matplotlib.pyplot as plt
 
     # Setup constants
-    N = 10  # Number of data
-    M =  3  # Number of DoF
-    T = 30  # Time length of data
-    K =  2  # Number of synergies
-    S = 15  # Time length of synergies
+    N =  10  # Number of data
+    M =   3  # Number of DoF
+    T = 150  # Time length of data
+    K =   2  # Number of synergies
+    S =  50  # Time length of synergies
+    n_iter = 1000
+    mu = 1e-4
 
     # Create a dataset with shape (N, T, M)
     data, synergies, (amplitude, delays) = generate_example_data(N, M, T, K, S, plot=False)
 
     # Estimate amplitude
     amplitude_est = np.random.uniform(0, 1, amplitude.shape)
-    for _ in range(10000):
-        amplitude_est = update_amplitude(data, synergies, amplitude_est, delays)
+    for _ in range(n_iter):
+        amplitude_est = update_amplitude(data, synergies, amplitude_est, delays, mu)
 
     # Print the results
     print("Actual:\n", amplitude)
@@ -212,30 +214,30 @@ def example_update_amplitude():
             ts = delays[n, k]
             data_est[n, ts:ts+S, :] += amplitude_est[n, k] * synergies[k, :, :]
 
-    # Plot synergy components
-    fig = plt.figure()
-    fig.suptitle("Synergy components")
-    for k in range(K):
-        for m in range(M):
-            ax = fig.add_subplot(M, K, m*K+k+1)
-            ax.plot(np.arange(synergies.shape[1]), synergies[k, :, m])
-            ax.set_xlim((0, synergies.shape[1]-1))
-            if k == 0:
-                ax.set_ylabel("DoF #{}".format(m+1))
-        ax.set_xlabel("synergy #{}".format(k+1))
-    fig.tight_layout(rect=[0, 0, 1, 0.96])
+    # Create a figure
+    fig = plt.figure(figsize=(12, 6), constrained_layout=True)
+    gs_master = GridSpec(nrows=1, ncols=2, figure=fig, width_ratios=[2, 1])
 
     # Plot reconstruction data
-    fig = plt.figure()
-    fig.suptitle("Original/Reconstruction data")
-    axes = [fig.add_subplot(M, 1, m+1) for m in range(M)]
+    M_col = int(np.ceil(np.sqrt(M)))
+    M_row = int(np.ceil(M/M_col))
+    gs_1 = GridSpecFromSubplotSpec(nrows=M_row, ncols=M_col, subplot_spec=gs_master[0, 0])
+    axes = [fig.add_subplot(gs_1[int(np.floor(m/M_col)), m%M_col]) for m in range(M)]
     for n in range(N):
         for m, ax in enumerate(axes):
-            ax.plot(np.arange(data.shape[1]), data[n, :, m], "--", lw=2, color=plt.get_cmap("viridis")((N-n)/(N+1)))
-            ax.plot(np.arange(data.shape[1]), data_est[n, :, m],   lw=1, color=plt.get_cmap("viridis")((N-n)/(N+1)))
+            ax.set_title("DoF #{}".format(m+1))
+            ax.plot(np.arange(data.shape[1]), data[n, :, m], "--", color="C{}".format(n))
+            ax.plot(np.arange(data.shape[1]), data_est[n, :, m], color="C{}".format(n))
             ax.set_xlim((0, data.shape[1]-1))
-            ax.set_ylabel("DoF #{}".format(m+1))
-    fig.tight_layout(rect=[0, 0, 1, 0.96])
+
+    # Plot synergy components
+    gs_2 = GridSpecFromSubplotSpec(nrows=K, ncols=1, subplot_spec=gs_master[0, 1])
+    for k in range(K):
+        ax = fig.add_subplot(gs_2[k, :])
+        ax.set_title("synergy #{}".format(k+1))
+        for m in range(M):
+            ax.plot(np.arange(synergies.shape[1]), synergies[k, :, m], "--", color="C{}".format(m))
+        ax.set_xlim((0, synergies.shape[1]-1))
 
     plt.show()
 
@@ -244,19 +246,22 @@ def example_update_synergies():
     import matplotlib.pyplot as plt
 
     # Setup constants
-    N = 10  # Number of data
-    M =  3  # Number of DoF
-    T = 30  # Time length of data
-    K =  2  # Number of synergies
-    S = 15  # Time length of synergies
+    # Setup constants
+    N =  10  # Number of data
+    M =   3  # Number of DoF
+    T = 150  # Time length of data
+    K =   2  # Number of synergies
+    S =  50  # Time length of synergies
+    n_iter = 1000
+    mu = 1e-3
 
     # Create a dataset with shape (N, T, M)
     data, synergies, (amplitude, delays) = generate_example_data(N, M, T, K, S, plot=False)
 
     # Estimate synergies
     synergies_est = np.random.uniform(0, 1, synergies.shape)
-    for _ in range(10000):
-        synergies_est = update_synergies(data, synergies_est, amplitude, delays)
+    for _ in range(n_iter):
+        synergies_est = update_synergies(data, synergies_est, amplitude, delays, mu)
 
     # Print the results
     print("Actual:\n", synergies)
@@ -270,31 +275,31 @@ def example_update_synergies():
             ts = delays[n, k]
             data_est[n, ts:ts+S, :] += amplitude[n, k] * synergies_est[k, :, :]
 
-    # Plot synergy components
-    fig = plt.figure()
-    fig.suptitle("Synergy components")
-    for k in range(K):
-        for m in range(M):
-            ax = fig.add_subplot(M, K, m*K+k+1)
-            ax.plot(np.arange(synergies.shape[1]), synergies[k, :, m], "--", lw=2)
-            ax.plot(np.arange(synergies.shape[1]), synergies_est[k, :, m], lw=1)
-            ax.set_xlim((0, synergies.shape[1]-1))
-            if k == 0:
-                ax.set_ylabel("DoF #{}".format(m+1))
-        ax.set_xlabel("synergy #{}".format(k+1))
-    fig.tight_layout(rect=[0, 0, 1, 0.96])
+    # Create a figure
+    fig = plt.figure(figsize=(12, 6), constrained_layout=True)
+    gs_master = GridSpec(nrows=1, ncols=2, figure=fig, width_ratios=[2, 1])
 
     # Plot reconstruction data
-    fig = plt.figure()
-    fig.suptitle("Original/Reconstruction data")
-    axes = [fig.add_subplot(M, 1, m+1) for m in range(M)]
+    M_col = int(np.ceil(np.sqrt(M)))
+    M_row = int(np.ceil(M/M_col))
+    gs_1 = GridSpecFromSubplotSpec(nrows=M_row, ncols=M_col, subplot_spec=gs_master[0, 0])
+    axes = [fig.add_subplot(gs_1[int(np.floor(m/M_col)), m%M_col]) for m in range(M)]
     for n in range(N):
         for m, ax in enumerate(axes):
-            ax.plot(np.arange(data.shape[1]), data[n, :, m], "--", lw=2, color=plt.get_cmap("viridis")((N-n)/(N+1)))
-            ax.plot(np.arange(data.shape[1]), data_est[n, :, m],   lw=1, color=plt.get_cmap("viridis")((N-n)/(N+1)))
+            ax.set_title("DoF #{}".format(m+1))
+            ax.plot(np.arange(data.shape[1]), data[n, :, m], "--", color="C{}".format(n))
+            ax.plot(np.arange(data.shape[1]), data_est[n, :, m], color="C{}".format(n))
             ax.set_xlim((0, data.shape[1]-1))
-            ax.set_ylabel("DoF #{}".format(m+1))
-    fig.tight_layout(rect=[0, 0, 1, 0.96])
+
+    # Plot synergy components
+    gs_2 = GridSpecFromSubplotSpec(nrows=K, ncols=1, subplot_spec=gs_master[0, 1])
+    for k in range(K):
+        ax = fig.add_subplot(gs_2[k, :])
+        ax.set_title("synergy #{}".format(k+1))
+        for m in range(M):
+            ax.plot(np.arange(synergies.shape[1]), synergies[k, :, m], "--", color="C{}".format(m))
+            ax.plot(np.arange(synergies_est.shape[1]), synergies_est[k, :, m], color="C{}".format(m))
+        ax.set_xlim((0, synergies.shape[1]-1))
 
     plt.show()
 

@@ -1,18 +1,19 @@
 import numpy as np
-from sklearn.decomposition import NMF
+import tqdm
 
 
 class TimeVaryingSynergy:
     """Time-varying synergies.
     """
 
-    def __init__(self, n_synergies, synergy_length):
+    def __init__(self, n_synergies, synergy_length, containing_negative_values=False):
         """
         Args:
             n_synergies: Number of synergies
         """
         self.n_synergies = n_synergies
         self.synergy_length = synergy_length
+        self.containing_negative_values = containing_negative_values
 
         # Initialize variables
         self.model = None
@@ -30,13 +31,18 @@ class TimeVaryingSynergy:
         self.dof = data.shape[2]
         self.data_length = data.shape[1]
 
+        # Convert the data to non-negative signals
+        if self.containing_negative_values:
+            data = transform_nonnegative(data)
+            self.dof = data.shape[2]  # Update the number of DoF
+
         self.synergies = np.random.uniform(0.1, 1, (self.n_synergies, self.synergy_length, self.dof))
         amplitude      = np.random.uniform(0.1, 1, (data.shape[0], self.n_synergies))
 
-        for i in range(max_iter):
+        for i in tqdm.tqdm(range(max_iter)):
             delays = update_delays(data, self.synergies)
             amplitude = update_amplitude(data, self.synergies, amplitude, delays)
-            self.synergies = update_synergies(data, self.synergies, amplitude, delays, eps=1e-9)
+            self.synergies = update_synergies(data, self.synergies, amplitude, delays)
 
         return self.synergies
 
@@ -50,9 +56,15 @@ class TimeVaryingSynergy:
         if self.synergies is None:
             return None
 
-        # Not implemented
+        # Convert the data to non-negative signals
+        if self.containing_negative_values:
+            data = transform_nonnegative(data)
+
+        # Encode the data
         amplitude = np.empty((data.shape[0], self.n_synergies))
-        delays = np.empty((data.shape[0], self.n_synergies))
+        for i in range(max_iter):
+            delays = update_delays(data, self.synergies)
+            amplitude = update_amplitude(data, self.synergies, amplitude, delays)
         activities = (amplitude, delays)
 
         return activities
@@ -67,8 +79,18 @@ class TimeVaryingSynergy:
         if self.synergies is None:
             return None
 
-        # Not implemented
-        data = np.empty((activities[0].shape[0], self.data_length, self.dof))
+        # Reconstruct data
+        amplitude, delays = activities
+        data = np.zeros((activities[0].shape[0], self.data_length, self.dof))
+        for n in range(data.shape[0]):
+            for k in range(self.n_synergies):
+                c = amplitude[n, k]
+                ts = delays[n, k]
+                data[n, ts:ts+self.synergy_length, :] += c * self.synergies[k, :, :]
+
+        # Convert non-negative signals backwards
+        if self.containing_negative_values:
+            data = inverse_transform_nonnegative(data)
 
         return data
 
@@ -95,7 +117,8 @@ def update_delays(data, synergies):
             corrs = []
             for k in range(n_synergies):
                 # Initialize the cross-correlation between the n-th data and k-th synergy.
-                # Note that the minimum possible value is zero.
+                # Note that the minimum possible value is zero;
+                # Default values are -1 so as to the previously-selected synergy is never selected again.
                 corr = -np.ones((data_length-synergy_length+1,))
 
                 # Compute the cross-correlation if its delay has not been found yet
@@ -117,67 +140,77 @@ def update_delays(data, synergies):
     return delays
 
 
-def update_amplitude(data, synergies, amplitude, delays):
+def update_amplitude(data, synergies, amplitude, delays, mu=0.001):
     """Find the amplitude (scale coefficient).
 
-    The algorithm is based on [d'Avella et al., 2003].
+    The algorithm is based on [d'Avella and Tresch, 2002].
     """
-    # Compute shifted synergies (correspond to W Theta[t_s]) and shifted and scaled synergies (correspond to W H_s)
-    shifted_synergies = np.zeros_like(data)
-    shifted_scaled_synergies = np.zeros_like(data)
+    # Compute shifted synergies and reconstruction data
+    shifted_synergies = np.zeros((data.shape[0], data.shape[1], data.shape[2], synergies.shape[0]))
+    data_est = np.zeros_like(data)
     for n in range(data.shape[0]):
         for k in range(synergies.shape[0]):
             ts = delays[n, k]
-            shifted_synergies[n, ts:ts+synergies.shape[1], :] += synergies[k, :, :]
-            shifted_scaled_synergies[n, ts:ts+synergies.shape[1], :] += synergies[k, :, :] * amplitude[n, k]
+            shifted_synergies[n, ts:ts+synergies.shape[1], :, k] += synergies[k, :, :]
+            data_est[n, ts:ts+synergies.shape[1], :] += synergies[k, :, :] * amplitude[n, k]
+
+    # Compute the gradient
+    grad = np.einsum("ntm,ntmk->ntk", data - data_est, shifted_synergies)
+    grad = -2 * np.sum(grad, axis=1)
 
     # Update the amplitude
-    for n in range(data.shape[0]):
-        N = np.dot(data[n].T, shifted_synergies[n])
-        D = np.dot(shifted_scaled_synergies[n].T, shifted_synergies[n])
-        #amplitude[n, :] = amplitude[n, :] * np.trace(N) / np.trace(D)
-        amplitude[n, :] = amplitude[n, :] + 0.001 * (np.trace(N) - np.trace(D))
+    amplitude = amplitude - mu * grad
+    amplitude = np.clip(amplitude, 0.0, None)  # Limit to non-negative values
 
     return amplitude
 
 
-def update_synergies(data, synergies, amplitude, delays, eps=1e-9):
+def update_synergies(data, synergies, amplitude, delays, mu=0.001):
     """Find synergies.
 
-    The algorithm is based on [d'Avella et al., 2003].
-    Note that the shape setup is different to the original paper due to implementation consistency.
+    The algorithm is based on [d'Avella and Tresch, 2002].
     """
-    n_data = data.shape[0]
-    data_length = data.shape[1]
-    n_synergies = synergies.shape[0]
-    synergy_length = synergies.shape[1]
-    n_dof = synergies.shape[2]
-
-    # Compute the scale and shift matrix (correspond to H) and shifted and scaled synergies (correspond to W H)
-    H = np.zeros((n_synergies, synergy_length, n_data, data_length))
-    WH = np.zeros((n_dof, n_data, data_length))
-    for n in range(n_data):
-        for k in range(n_synergies):
+    # Compute the gradient
+    grad = np.zeros_like(synergies)
+    for k in range(synergies.shape[0]):
+        for n in range(data.shape[0]):
             ts = delays[n, k]
-            for i in range(synergy_length):
-                H[k, i, n, ts+i] = amplitude[n, k]
-                WH[:, n, ts+i] += synergies[k, i, :] * amplitude[n, k]
+            grad[k, :, :] += (data[n, ts:ts+synergies.shape[1], :] - synergies[k, :, :] * amplitude[n, k]) * amplitude[n, k]
 
-    # Reshape matrices
-    data = np.transpose(data, (2, 0, 1))  # shape: (#DoF, #data, length)
-    data = data.reshape((n_dof, n_data*data_length))  # shape: (#DoF, #data * length)
-    synergies = np.transpose(synergies, (2, 0, 1))  # shape: (#DoF, #synergies, synergy-length)
-    synergies = synergies.reshape((n_dof, n_synergies*synergy_length))  # shape: (#DoF, #synergies * synergy-length)
-    H = H.reshape((n_synergies * synergy_length, n_data * data_length))  # shape: (#synergies * synergy-length, #data * length)
-    WH = WH.reshape((n_dof, n_data*data_length))  # shape: (#DoF, #data * length)
+    # Compute the gradient
+    grad = grad * -2
 
-    # Update synergies
-    N = np.dot(data, H.T)
-    D = np.dot(WH, H.T)
-    #synergies = synergies * N / (D + eps)
-    synergies = synergies + 0.001 * (N - D)
-
-    synergies = synergies.reshape((n_dof, n_synergies, synergy_length))  # shape: (#DoF, #synergies, synergy-length)
-    synergies = np.transpose(synergies, (1, 2, 0))  # shape: (#synergies, synergy-length, #DoF)
+    # Update the amplitude
+    synergies = synergies - mu * grad
+    synergies = np.clip(synergies, 0.0, None)  # Limit to non-negative values
 
     return synergies
+
+
+def transform_nonnegative(data):
+    """Convert a data that has negative values to non-negative signals with doubled dimensions.
+    Data is assumed to have the shape (#trajectories, length, #DoF).
+    Converted non-negative data have the shape (#trajectories, length, 2 * #DoF).
+    """
+    n_dof = data.shape[2]  # Dimensionality of the original data
+
+    # Convert the data to non-negative signals
+    data_nn = np.empty((data.shape[0], data.shape[1], n_dof*2))
+    data_nn[:, :, :n_dof] = +np.maximum(data, 0.0)
+    data_nn[:, :, n_dof:] = -np.minimum(data, 0.0)
+
+    return data_nn
+
+
+def inverse_transform_nonnegative(data):
+    """Inverse conversion of `transform_nonnegative()`; Convert non-negative signals to a data that has negative values.
+    Non-negative data is assumed to have the shape (#trajectories, length, 2 * #DoF).
+    Reconstructed data have the shape (#trajectories, length, #DoF).
+    """
+    n_dof = int(data.shape[2] / 2)  # Dimensionality of the original data
+
+    # Restore the original data
+    data_rc = np.empty((data.shape[0], data.shape[1], n_dof))
+    data_rc = data[:, :, :n_dof] - data[:, :, n_dof:]
+
+    return data_rc
