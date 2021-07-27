@@ -11,11 +11,11 @@ def example():
     import matplotlib.pyplot as plt
 
     # Setup constants
-    N = 10  # Number of data
-    M =  3  # Number of DoF
-    T = 30  # Time length of data
-    K =  2  # Number of synergies
-    S = 15  # Time length of synergies
+    N =  10  # Number of data
+    M =   3  # Number of DoF
+    T = 150  # Time length of data
+    K =   2  # Number of synergies
+    S =  50  # Time length of synergies
     max_iter = 10000
 
     # Create a dataset with shape (N, T, M)
@@ -191,8 +191,8 @@ def example_update_amplitude():
     T = 150  # Time length of data
     K =   2  # Number of synergies
     S =  50  # Time length of synergies
-    n_iter = 200
-    mu = 5e-3
+    n_iter = 1000
+    mu = 1e-4
 
     # Create a dataset with shape (N, T, M)
     data, synergies, (amplitude, delays) = generate_example_data(N, M, T, K, S, plot=False)
@@ -252,8 +252,8 @@ def example_update_synergies():
     T = 150  # Time length of data
     K =   2  # Number of synergies
     S =  50  # Time length of synergies
-    n_iter = 500
-    mu = 5e-3
+    n_iter = 1000
+    mu = 1e-3
 
     # Create a dataset with shape (N, T, M)
     data, synergies, (amplitude, delays) = generate_example_data(N, M, T, K, S, plot=False)
@@ -305,7 +305,7 @@ def example_update_synergies():
 
 
 if __name__ == "__main__":
-    #example()
+    example()
     #example_update_delays()
     #example_update_amplitude()
-    example_update_synergies()
+    #example_update_synergies()
