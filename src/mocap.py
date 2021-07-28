@@ -1,24 +1,48 @@
 import numpy as np
 import matplotlib
-matplotlib.use("TkAgg")
+#matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
 import spatial, timevarying
 
 
 def main():
-    # Load an EMG data
-    filename = "data/data_1e-2.csv"
-    data = np.loadtxt(filename, delimiter=",")
+    dirname = "data/dataset1"
 
-    times = data[:, 0]
-    positions = data[:, 1:]
+    trajectories = load_dataset(dirname)
+    print(trajectories.shape)
 
-    positions = positions.reshape(1, positions.shape[0], positions.shape[1])
+    times = np.arange(trajectories.shape[1])
 
     # Extact motor synergies
-    #extract_spatial(positions, times)
-    extract_tv(positions, times)
+    #extract_spatial(trajectories, times)
+    extract_tv(trajectories, times)
+
+
+def load_dataset(dirname):
+    import os, glob
+
+    dataset = []
+
+    # Load trajectory dataset
+    filelist = glob.glob(os.path.join(dirname, "*.csv"))
+    for filename in filelist:
+        data = np.loadtxt(filename, delimiter=",")
+        trajectory = data[:, 1:]
+        dataset.append(trajectory)
+
+    length = max([d.shape[0] for d in dataset])
+
+    for i in range(len(dataset)):
+        if dataset[i].shape[0] != length:
+            d = dataset[i]
+            l = d.shape[0]
+            dataset[i] = np.zeros((length, d.shape[1]))
+            dataset[i][0:l, :] = d
+
+    trajectories = np.stack(dataset, axis=0)
+
+    return trajectories
 
 
 def extract_spatial(data, times):
@@ -65,24 +89,27 @@ def extract_spatial(data, times):
 
 def extract_tv(data, times):
     # Setup constants
-    N =   1  # Number of data
+    N =  10  # Number of data
     M =   3  # Number of DoF
-    K =   3  # Number of synergies
-    S = 300  # Time length of synergies
+    K =   6  # Number of synergies
+    S = 120  # Time length of synergies
+    n_iter = 10000
 
     #fig = plt.figure()
     #for m in range(M):
     #    ax = fig.add_subplot(4, 1, m+1)
-    #    ax.plot(np.arange(data.shape[1]), data[0, :, m])
+    #    for n in range(N):
+    #        ax.plot(np.arange(data.shape[1]), data[n, :, m])
 
     # Get synergies
-    model = timevarying.TimeVaryingSynergy(K, S, containing_negative_values=True)
-    model.extract(data, max_iter=10000)
+    model = timevarying.TimeVaryingSynergy(K, S, containing_negative_values=True, mu_w=1e-3, mu_c=1e-3)
+    model.extract(data, max_iter=n_iter)
 
     # Reconstruct actions
     data_est = np.empty_like(data)
-    activities = model.encode(data)
+    activities = model.encode(data, max_iter=1000, mu_c=5e-3)
     data_est = model.decode(activities)
+    print(activities)
 
     # Create a figure
     fig = plt.figure(figsize=(12, 6), constrained_layout=True)
