@@ -6,7 +6,7 @@ class TimeVaryingSynergy:
     """Time-varying synergies.
     """
 
-    def __init__(self, n_synergies, synergy_length, containing_negative_values=False):
+    def __init__(self, n_synergies, synergy_length, containing_negative_values=False, mu_w=1e-3, mu_c=1e-3):
         """
         Args:
             n_synergies: Number of synergies
@@ -20,6 +20,8 @@ class TimeVaryingSynergy:
         self.synergies = None
         self.dof = None
         self.data_length = None
+        self.mu_w = mu_w
+        self.mu_c = mu_c
 
     def extract(self, data, max_iter=10000):
         """Extract time-varying synergies from given data.
@@ -36,17 +38,19 @@ class TimeVaryingSynergy:
             data = transform_nonnegative(data)
             self.dof = data.shape[2]  # Update the number of DoF
 
+        # Initialize synergies
         self.synergies = np.random.uniform(0.1, 1, (self.n_synergies, self.synergy_length, self.dof))
         amplitude      = np.random.uniform(0.1, 1, (data.shape[0], self.n_synergies))
 
+        # Extraction loop
         for i in tqdm.tqdm(range(max_iter)):
             delays = update_delays(data, self.synergies)
-            amplitude = update_amplitude(data, self.synergies, amplitude, delays)
-            self.synergies = update_synergies(data, self.synergies, amplitude, delays)
+            amplitude = update_amplitude(data, self.synergies, amplitude, delays, self.mu_c)
+            self.synergies = update_synergies(data, self.synergies, amplitude, delays, self.mu_w)
 
         return self.synergies
 
-    def encode(self, data, max_iter=1000):
+    def encode(self, data, max_iter=1000, mu_c=None):
         """Encode given data to synergy activities.
 
         Data is assumed to have the shape (#trajectories, data-length, #DoF).
@@ -60,11 +64,15 @@ class TimeVaryingSynergy:
         if self.containing_negative_values:
             data = transform_nonnegative(data)
 
-        # Encode the data
-        amplitude = np.empty((data.shape[0], self.n_synergies))
-        for i in range(max_iter):
+        if mu_c is None:
+            mu_c = self.mu_c
+
+        # Encoding loop
+        amplitude = np.random.uniform(0.1, 1.0, size=(data.shape[0], self.n_synergies))
+        for i in tqdm.tqdm(range(max_iter)):
             delays = update_delays(data, self.synergies)
-            amplitude = update_amplitude(data, self.synergies, amplitude, delays)
+            amplitude = update_amplitude(data, self.synergies, amplitude, delays, mu_c)
+
         activities = (amplitude, delays)
 
         return activities
