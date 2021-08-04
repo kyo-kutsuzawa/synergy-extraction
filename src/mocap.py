@@ -89,7 +89,7 @@ def extract_tv(data, times):
     # Setup constants
     N =  10  # Number of data
     M =   3  # Number of DoF
-    K =   6  # Number of synergies
+    K =   3  # Number of synergies
     S = 120  # Time length of synergies
     n_iter = 10000
 
@@ -132,7 +132,8 @@ def extract_tv(data, times):
         ax = fig.add_subplot(gs_2[k, :])
         ax.set_title("synergy #{}".format(k+1))
         for m in range(M):
-            ax.plot(np.arange(model.synergies.shape[1]), model.synergies[k, :, m], lw=1, color="C{}".format(m))
+            ax.plot(np.arange(model.synergies.shape[1]), +model.synergies[k, :, m],   lw=1, color="C{}".format(m))
+            ax.plot(np.arange(model.synergies.shape[1]), -model.synergies[k, :, m+M], lw=1, color="C{}".format(m))
         ax.set_xlim((0, model.synergies.shape[1]-1))
 
     plt.show()
