@@ -1,5 +1,4 @@
 import numpy as np
-import tqdm
 
 
 class TimeVaryingSynergy:
@@ -39,14 +38,18 @@ class TimeVaryingSynergy:
             self.dof = data.shape[2]  # Update the number of DoF
 
         # Initialize synergies
-        self.synergies = np.random.uniform(0.1, 1, (self.n_synergies, self.synergy_length, self.dof))
-        amplitude      = np.random.uniform(0.1, 1, (data.shape[0], self.n_synergies))
+        self.synergies = np.random.uniform(0.1, 0.2, (self.n_synergies, self.synergy_length, self.dof))
+        amplitude      = np.random.uniform(0.1, 0.2, (data.shape[0], self.n_synergies))
 
         # Extraction loop
-        for i in tqdm.tqdm(range(max_iter)):
+        for i in range(max_iter):
             delays = update_delays(data, self.synergies)
             amplitude = update_amplitude(data, self.synergies, amplitude, delays, self.mu_c)
             self.synergies = update_synergies(data, self.synergies, amplitude, delays, self.mu_w)
+
+            if i % 100 == 0:
+                r2 = compute_R2(data, self.synergies, amplitude, delays)
+                print("Iter {:4d}: R2 = {}".format(i, r2))
 
         return self.synergies
 
@@ -68,10 +71,12 @@ class TimeVaryingSynergy:
             mu_c = self.mu_c
 
         # Encoding loop
-        amplitude = np.random.uniform(0.1, 1.0, size=(data.shape[0], self.n_synergies))
-        for i in tqdm.tqdm(range(max_iter)):
+        amplitude = np.random.uniform(0.1, 0.2, size=(data.shape[0], self.n_synergies))
+        for i in range(max_iter):
             delays = update_delays(data, self.synergies)
             amplitude = update_amplitude(data, self.synergies, amplitude, delays, mu_c)
+
+            print("Encoding... {}% ({}/{})".format(int(i/max_iter*100), i, max_iter), end="\r")
 
         activities = (amplitude, delays)
 
@@ -163,8 +168,7 @@ def update_amplitude(data, synergies, amplitude, delays, mu=0.001):
             data_est[n, ts:ts+synergies.shape[1], :] += synergies[k, :, :] * amplitude[n, k]
 
     # Compute the gradient
-    grad = np.einsum("ntm,ntmk->ntk", data - data_est, shifted_synergies)
-    grad = -2 * np.sum(grad, axis=1)
+    grad = -2 * np.einsum("ntm,ntmk->nk", data - data_est, shifted_synergies)
 
     # Update the amplitude
     amplitude = amplitude - mu * grad
@@ -178,12 +182,20 @@ def update_synergies(data, synergies, amplitude, delays, mu=0.001):
 
     The algorithm is based on [d'Avella and Tresch, 2002].
     """
+    # Compute reconstruction data
+    data_est = np.zeros_like(data)
+    for n in range(data.shape[0]):
+        for k in range(synergies.shape[0]):
+            ts = delays[n, k]
+            data_est[n, ts:ts+synergies.shape[1], :] += synergies[k, :, :] * amplitude[n, k]
+
     # Compute the gradient
+    deviation = data - data_est
     grad = np.zeros_like(synergies)
     for k in range(synergies.shape[0]):
         for n in range(data.shape[0]):
             ts = delays[n, k]
-            grad[k, :, :] += (data[n, ts:ts+synergies.shape[1], :] - synergies[k, :, :] * amplitude[n, k]) * amplitude[n, k]
+            grad[k, :, :] += deviation[n, ts:ts+synergies.shape[1], :] * amplitude[n, k]
 
     # Compute the gradient
     grad = grad * -2
@@ -193,6 +205,21 @@ def update_synergies(data, synergies, amplitude, delays, mu=0.001):
     synergies = np.clip(synergies, 0.0, None)  # Limit to non-negative values
 
     return synergies
+
+
+def compute_R2(data, synergies, amplitude, delays):
+    # Compute reconstruction data
+    data_est = np.zeros_like(data)
+    for n in range(data.shape[0]):
+        for k in range(synergies.shape[0]):
+            ts = delays[n, k]
+            data_est[n, ts:ts+synergies.shape[1], :] += synergies[k, :, :] * amplitude[n, k]
+
+    # Compute the R2 value
+    data_mean = np.mean(data)
+    R2 = 1 - np.sum(np.square(data - data_est)) / np.sum(np.square(data - data_mean))
+
+    return R2
 
 
 def transform_nonnegative(data):
