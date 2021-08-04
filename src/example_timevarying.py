@@ -16,7 +16,7 @@ def example():
     T = 150  # Time length of data
     K =   2  # Number of synergies
     S =  50  # Time length of synergies
-    max_iter = 10000
+    max_iter = 2000
 
     # Create a dataset with shape (N, T, M)
     data, synergies, (amplitude, delays) = generate_example_data(N, M, T, K, S, plot=False)
