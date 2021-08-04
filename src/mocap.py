@@ -1,6 +1,4 @@
 import numpy as np
-import matplotlib
-#matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
 import spatial, timevarying
@@ -95,11 +93,12 @@ def extract_tv(data, times):
     S = 120  # Time length of synergies
     n_iter = 10000
 
-    #fig = plt.figure()
-    #for m in range(M):
-    #    ax = fig.add_subplot(4, 1, m+1)
-    #    for n in range(N):
-    #        ax.plot(np.arange(data.shape[1]), data[n, :, m])
+    fig = plt.figure(constrained_layout=True)
+    for m in range(M):
+        ax = fig.add_subplot(3, 1, m+1)
+        for n in range(N):
+            ax.plot(np.arange(data.shape[1]), data[n, :, m])
+    plt.show()
 
     # Get synergies
     model = timevarying.TimeVaryingSynergy(K, S, containing_negative_values=True, mu_w=1e-3, mu_c=1e-3)
@@ -107,7 +106,7 @@ def extract_tv(data, times):
 
     # Reconstruct actions
     data_est = np.empty_like(data)
-    activities = model.encode(data, max_iter=1000, mu_c=5e-3)
+    activities = model.encode(data, max_iter=2000, mu_c=1e-3)
     data_est = model.decode(activities)
     print(activities)
 
