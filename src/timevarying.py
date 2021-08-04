@@ -38,8 +38,9 @@ class TimeVaryingSynergy:
             self.dof = data.shape[2]  # Update the number of DoF
 
         # Initialize synergies
-        self.synergies = np.random.uniform(0.1, 0.2, (self.n_synergies, self.synergy_length, self.dof))
-        amplitude      = np.random.uniform(0.1, 0.2, (data.shape[0], self.n_synergies))
+        data_mean = np.mean(data)
+        self.synergies = np.random.uniform(0.0, data_mean*2, (self.n_synergies, self.synergy_length, self.dof))
+        amplitude      = np.random.uniform(0.01, 1.0, (data.shape[0], self.n_synergies))
 
         # Extraction loop
         for i in range(max_iter):
@@ -71,7 +72,7 @@ class TimeVaryingSynergy:
             mu_c = self.mu_c
 
         # Encoding loop
-        amplitude = np.random.uniform(0.1, 0.2, size=(data.shape[0], self.n_synergies))
+        amplitude = np.random.uniform(0.01, 1.0, size=(data.shape[0], self.n_synergies))
         for i in range(max_iter):
             delays = update_delays(data, self.synergies)
             amplitude = update_amplitude(data, self.synergies, amplitude, delays, mu_c)
