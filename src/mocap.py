@@ -35,7 +35,7 @@ def load_dataset(dirname):
         if dataset[i].shape[0] != length:
             d = dataset[i]
             l = d.shape[0]
-            dataset[i] = np.zeros((length, d.shape[1]))
+            dataset[i] = np.full((length, d.shape[1]), d[-1, :])
             dataset[i][0:l, :] = d
 
     trajectories = np.stack(dataset, axis=0)
@@ -87,8 +87,8 @@ def extract_spatial(data, times):
 
 def extract_tv(data, times):
     # Setup constants
-    N =  10  # Number of data
-    M =   3  # Number of DoF
+    N = data.shape[0]  # Number of data
+    M = data.shape[2]  # Number of DoF
     K =   3  # Number of synergies
     S = 120  # Time length of synergies
     n_iter = 10000
