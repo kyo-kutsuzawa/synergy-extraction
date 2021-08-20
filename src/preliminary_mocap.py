@@ -85,6 +85,19 @@ def generate_dataset():
     return trajectories
 
 
+def multidirectional(N):
+    trajectory = []
+    for i in range(5):
+        theta = np.pi / 4 * (i%5)
+        x_goal = np.array([-np.cos(theta), 0.0, -np.sin(theta)]) * 0.2
+        x = reaching(x_goal, N)
+        trajectory.append(x)
+
+    trajectory = np.concatenate(trajectory)
+    trajectory = np.expand_dims(trajectory, axis=0)
+    return trajectory
+
+
 def reaching(x_goal, N):
     N1 = int(N / 2)
     N2 = N - N1
@@ -145,6 +158,22 @@ def example_reaching():
     plt.show()
 
 
+def example_multidirectional():
+    # Setup constants
+    N = 1  # Number of data
+    M = 3  # Number of DoF
+
+    trajectories = multidirectional(100)
+    print(trajectories.shape)
+
+    fig = plt.figure(constrained_layout=True)
+    for m in range(M):
+        ax = fig.add_subplot(3, 1, m+1)
+        for n in range(N):
+            ax.plot(np.arange(trajectories.shape[1]), trajectories[n, :, m])
+    plt.show()
+
+
 if __name__ == "__main__":
-    #example_reaching()
-    main()
+    example_multidirectional()
+    #main()
