@@ -5,7 +5,7 @@ import timevarying
 
 
 def main():
-    trajectories = generate_dataset()
+    trajectories = generate_dataset(5)
     print(trajectories.shape)
 
     times = np.arange(trajectories.shape[1])
@@ -16,10 +16,10 @@ def main():
 
 def extract_tv(data, times):
     # Setup constants
-    N =  15  # Number of data
-    M =   3  # Number of DoF
+    N = data.shape[0]  # Number of data
+    M = data.shape[2]  # Number of DoF
     K =   3  # Number of synergies
-    S =  60  # Time length of synergies
+    S = 100  # Time length of synergies
     n_iter = 2000
 
     fig = plt.figure(constrained_layout=True)
@@ -68,34 +68,29 @@ def extract_tv(data, times):
     plt.show()
 
 
-def generate_dataset():
-    dataset = []
-    for i in range(15):
-        theta = np.pi / 4 * (i%5)
-        x = np.array([np.cos(theta), 0.0, np.sin(theta)]) * 0.2
-        data = reaching(x, 60)
+def generate_dataset(n_data):
+    trajectory_length = 600
+    reaching_length = 100
+    time_offset = 20
 
-        idx = np.random.randint(0, 40)
-        trajectory = np.zeros((100, 3))
-        trajectory[idx:idx+60, :] = data
-        dataset.append(trajectory)
+    # Initialize a dataset
+    trajectories = np.zeros((n_data, trajectory_length, 3))
 
-    trajectories = np.stack(dataset, axis=0)
+    for n in range(n_data):
+        idx = 0
+        for i in range(5):
+            # Generate a single reaching movement
+            theta = np.pi / 4 * (i%5)
+            x_goal = np.array([-np.cos(theta), 0.0, -np.sin(theta)]) * 0.2
+            x = reaching(x_goal, reaching_length)
+
+            # Add the reaching movement to the dataset
+            idx += np.random.randint(0, time_offset)
+            trajectories[n, idx:idx+reaching_length, :] = x
+
+            idx += reaching_length
 
     return trajectories
-
-
-def multidirectional(N):
-    trajectory = []
-    for i in range(5):
-        theta = np.pi / 4 * (i%5)
-        x_goal = np.array([-np.cos(theta), 0.0, -np.sin(theta)]) * 0.2
-        x = reaching(x_goal, N)
-        trajectory.append(x)
-
-    trajectory = np.concatenate(trajectory)
-    trajectory = np.expand_dims(trajectory, axis=0)
-    return trajectory
 
 
 def reaching(x_goal, N):
@@ -158,22 +153,5 @@ def example_reaching():
     plt.show()
 
 
-def example_multidirectional():
-    # Setup constants
-    N = 1  # Number of data
-    M = 3  # Number of DoF
-
-    trajectories = multidirectional(100)
-    print(trajectories.shape)
-
-    fig = plt.figure(constrained_layout=True)
-    for m in range(M):
-        ax = fig.add_subplot(3, 1, m+1)
-        for n in range(N):
-            ax.plot(np.arange(trajectories.shape[1]), trajectories[n, :, m])
-    plt.show()
-
-
 if __name__ == "__main__":
-    example_multidirectional()
-    #main()
+    main()
