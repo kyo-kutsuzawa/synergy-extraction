@@ -5,6 +5,29 @@ from timevarying import TimeVaryingSynergy
 from timevarying import update_delays, update_amplitude, update_synergies
 
 
+def main():
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--task", "-t", nargs="+", choices=["all", "entire", "delay", "amplitude", "synergy", "data"], default="entire")
+    args = parser.parse_args()
+
+    if "data" in args.task or "all" in args.task:
+        generate_example_data(plot=True)
+
+    if "delay" in args.task or "all" in args.task:
+        example_update_delays()
+
+    if "amplitude" in args.task or "all" in args.task:
+        example_update_amplitude()
+
+    if "synergy" in args.task or "all" in args.task:
+        example_update_synergies()
+
+    if "entire" in args.task or "all" in args.task:
+        example()
+
+
 def example():
     """Check synergy extraction code.
     """
@@ -305,7 +328,4 @@ def example_update_synergies():
 
 
 if __name__ == "__main__":
-    example()
-    #example_update_delays()
-    #example_update_amplitude()
-    #example_update_synergies()
+    main()
