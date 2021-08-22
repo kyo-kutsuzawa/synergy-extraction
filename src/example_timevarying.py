@@ -35,15 +35,16 @@ def example():
     M =   3  # Number of DoF
     T = 150  # Time length of data
     K =   2  # Number of synergies
-    S =  50  # Time length of synergies
-    max_iter = 2000
+    D =   4  # Number of synergies
+    S =  20  # Time length of synergies
+    max_iter = 1000
 
     # Create a dataset with shape (N, T, M)
-    data, synergies, (amplitude, delays) = generate_example_data(N, M, T, K, S, plot=False)
+    data, synergies, (amplitude, delays) = generate_example_data(N, M, T, K, D, S, plot=False)
     #data += abs(np.random.normal(0, 0.1, size=data.shape))  # Add Gaussian noise
 
     # Get synergies
-    model = TimeVaryingSynergy(K, S)
+    model = TimeVaryingSynergy(K, D, S)
     model.extract(data, max_iter=max_iter)
 
     # Reconstruct actions
