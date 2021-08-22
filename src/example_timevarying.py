@@ -122,6 +122,10 @@ def generate_example_data(N=3, M=3, T=100, K=3, D=4, S=15, plot=True):
         for k in range(K):
             delays[n].append([])
             margin = T - S * synergy_use[n, k] - refractory_period * (synergy_use[n, k] - 1)
+
+            if margin < 0:
+                return
+
             ts = 0
             for l in range(synergy_use[n, k]):
                 delta_ts = np.random.randint(margin)
@@ -141,9 +145,6 @@ def generate_example_data(N=3, M=3, T=100, K=3, D=4, S=15, plot=True):
             for _ in delays_nk:
                 c = np.random.uniform(0, 1)
                 amplitude[-1][-1].append(c)
-
-    print(delays)
-    print(amplitude)
 
     # Compute a dataset from the synergies and activities
     data = np.zeros((N, T, M))
