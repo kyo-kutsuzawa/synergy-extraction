@@ -109,6 +109,52 @@ class TimeVaryingSynergy:
         return data
 
 
+def match_synergies(data, synergies, n_synergy_use, refractory_period):
+    """Find the delays and amplitude with matching pursuit.
+
+    The algorithm is based on [d'Avella et al., 2005].
+    """
+    # Setup variables
+    data = data.copy()
+    n_data = data.shape[0]
+    data_length = data.shape[1]
+    synergy_length = synergies.shape[1]
+    n_synergies = synergies.shape[0]
+
+    # Initialize delays
+    delays = [[[] for _ in range(n_synergies)] for _ in range(data.shape[0])]
+    amplitude = [[[] for _ in range(n_synergies)] for _ in range(data.shape[0])]
+
+    # Find delay times for each data sequence
+    for n in range(n_data):
+        synergy_available = np.full((n_synergies, data_length), True)  # Whether the delay time of the synergy has been found
+        for d in range(n_synergy_use):
+            # Compute dot products for all possible patterns
+            corr = np.zeros((n_synergies, data_length))  # Whether the delay time of the synergy has been found
+            for k in range(n_synergies):
+                for ts in range(data_length - synergy_length):
+                    if synergy_available[k, ts]:
+                        corr[k, ts] = np.sum(data[n, ts:ts+synergy_length, :] * synergies[k])
+
+            # Register maximum value
+            k, ts = np.unravel_index(np.argmax(corr), corr.shape)
+            c = np.max(corr)
+            delays[n][k].append(ts)
+
+            # Subtract the selected pattern
+            data[n, ts:ts+synergy_length, :] -= c * synergies[k]
+
+            # Remove the selected pattern and its surroundings
+            t0 = max(ts - refractory_period, 0)
+            t1 = min(ts + refractory_period, data_length)
+            synergy_available[k, t0:t1] = False
+
+        for k in range(n_synergies):
+            delays[n][k].sort()
+
+    return delays
+
+
 def update_delays(data, synergies):
     """Find the delays using a nested matching procedure based on the cross-correlation.
 

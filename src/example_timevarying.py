@@ -1,8 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
-from timevarying import TimeVaryingSynergy
-from timevarying import update_delays, update_amplitude, update_synergies
+from timevarying import TimeVaryingSynergy, match_synergies
+from timevarying import match_synergies, update_delays, update_amplitude, update_synergies
 
 
 def main():
@@ -194,25 +194,26 @@ def example_update_delays():
     M =   3  # Number of DoF
     T = 150  # Time length of data
     K =   2  # Number of synergies
-    S =  50  # Time length of synergies
+    D =   4  # Number of synergies
+    S =  20  # Time length of synergies
+    refractory_period = 10
 
     # Create a dataset with shape (N, T, M)
-    data, synergies, (amplitude, delays) = generate_example_data(N, M, T, K, S, plot=False)
+    data, synergies, (amplitude, delays) = generate_example_data(N, M, T, K, D, S, plot=False)
 
     # Estimate delays
-    delays_est = update_delays(data, synergies)
-
+    delays_est = match_synergies(data, synergies, D, refractory_period)
     # Print the results
     print("Actual:\n", delays)
     print("Expect:\n", delays_est)
-    print("Residual:\n", delays - delays_est)
+    print("Residual:\n", compute_residual(delays, delays_est))
 
     # Reconstruct the data
     data_est = np.zeros_like(data)
     for n in range(N):
         for k in range(K):
-            ts = delays_est[n, k]
-            data_est[n, ts:ts+S, :] += amplitude[n, k] * synergies[k, :, :]
+            for ts, c in zip(delays_est[n][k], amplitude[n][k]):
+                data_est[n, ts:ts+S, :] += c * synergies[k, :, :]
 
     # Create a figure
     fig = plt.figure(figsize=(12, 6), constrained_layout=True)
@@ -227,7 +228,7 @@ def example_update_delays():
         for m, ax in enumerate(axes):
             ax.set_title("DoF #{}".format(m+1))
             ax.plot(np.arange(data.shape[1]), data[n, :, m], "--", color="C{}".format(n))
-            ax.plot(np.arange(data.shape[1]), data_est[n, :, m], color="C{}".format(n))
+            ax.plot(np.arange(data.shape[1]), data_est[n, :, m], lw=1, color="C{}".format(n))
             ax.set_xlim((0, data.shape[1]-1))
 
     # Plot synergy components
@@ -362,6 +363,18 @@ def example_update_synergies():
         ax.set_xlim((0, synergies.shape[1]-1))
 
     plt.show()
+
+
+def compute_residual(actual, expect):
+    residual = []
+    for a_n, e_n in zip(actual, expect):
+        residual.append([])
+        for a_nk, e_nk in zip(a_n, e_n):
+            residual[-1].append([])
+            for a, e in zip(a_nk, e_nk):
+                residual[-1][-1].append(float(a - e))
+
+    return residual
 
 
 if __name__ == "__main__":
