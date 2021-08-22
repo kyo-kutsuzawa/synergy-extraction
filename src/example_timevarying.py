@@ -83,13 +83,14 @@ def example():
     plt.show()
 
 
-def generate_example_data(N=3, M=3, T=30, K=2, S=15, plot=True):
+def generate_example_data(N=3, M=3, T=100, K=3, D=4, S=15, plot=True):
     """Check example-data generation code.
 
     N: Number of data
     M: Number of DoF
     T: Time length of data
-    K: Number of synergies
+    K: Number of synergies in a repertory
+    D: Number of synergies used in a data
     S: Time length of synergies
     """
     def gaussian(x, mu, std):
@@ -106,15 +107,50 @@ def generate_example_data(N=3, M=3, T=30, K=2, S=15, plot=True):
                 synergies[k, s, m] = gaussian(s, mu, std)
 
     # Generate synergy activities (i.e., amplitude and delay)
-    amplitude = np.random.uniform(0, 1, (N, K))
-    delays = np.random.randint(0, T-S, (N, K))
+    refractory_period = np.ceil(S * 0.5).astype(np.int)
+
+    # Determine the numbers of synergies to be used
+    synergy_use = np.random.uniform(0, 1, (N, K))
+    synergy_use = synergy_use / np.sum(synergy_use, axis=1, keepdims=True) * D
+    synergy_use = np.round(synergy_use).astype(np.int)
+    synergy_use[:, -1] = D - np.sum(synergy_use[:, :-1], axis=1)
+
+    # Compute delays
+    delays = []
+    for n in range(N):
+        delays.append([])
+        for k in range(K):
+            delays[n].append([])
+            margin = T - S * synergy_use[n, k] - refractory_period * (synergy_use[n, k] - 1)
+            ts = 0
+            for l in range(synergy_use[n, k]):
+                delta_ts = np.random.randint(margin)
+                ts += delta_ts
+                margin -= delta_ts
+                if l >= 1:
+                    ts += refractory_period
+                delays[n][k].append(ts)
+                ts += S
+
+    # Compute amplitude
+    amplitude = []
+    for delays_n in delays:
+        amplitude.append([])
+        for delays_nk in delays_n:
+            amplitude[-1].append([])
+            for _ in delays_nk:
+                c = np.random.uniform(0, 1)
+                amplitude[-1][-1].append(c)
+
+    print(delays)
+    print(amplitude)
 
     # Compute a dataset from the synergies and activities
     data = np.zeros((N, T, M))
     for n in range(N):
         for k in range(K):
-            ts = delays[n, k]
-            data[n, ts:ts+S, :] += amplitude[n, k] * synergies[k, :, :]
+            for ts, c in zip(delays[n][k], amplitude[n][k]):
+                data[n, ts:ts+S, :] += c * synergies[k, :, :]
 
     # Plot results if specified
     if plot:
