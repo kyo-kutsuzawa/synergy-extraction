@@ -202,17 +202,23 @@ def example_update_delays():
     data, synergies, (amplitude, delays) = generate_example_data(N, M, T, K, D, S, plot=False)
 
     # Estimate delays
-    delays_est = match_synergies(data, synergies, D, refractory_period)
+    delays_est, amplitude_est = match_synergies(data, synergies, D, refractory_period)
+
     # Print the results
+    print("[Delays]")
     print("Actual:\n", delays)
     print("Expect:\n", delays_est)
     print("Residual:\n", compute_residual(delays, delays_est))
+    print("[Amplitude]")
+    print("Actual:\n", amplitude)
+    print("Expect:\n", amplitude_est)
+    print("Residual:\n", compute_residual(amplitude, amplitude_est))
 
     # Reconstruct the data
     data_est = np.zeros_like(data)
     for n in range(N):
         for k in range(K):
-            for ts, c in zip(delays_est[n][k], amplitude[n][k]):
+            for ts, c in zip(delays_est[n][k], amplitude_est[n][k]):
                 data_est[n, ts:ts+S, :] += c * synergies[k, :, :]
 
     # Create a figure

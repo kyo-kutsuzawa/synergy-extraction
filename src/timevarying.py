@@ -136,10 +136,11 @@ def match_synergies(data, synergies, n_synergy_use, refractory_period):
                     if synergy_available[k, ts]:
                         corr[k, ts] = np.sum(data[n, ts:ts+synergy_length, :] * synergies[k])
 
-            # Register maximum value
+            # Register the best-matching pattern
             k, ts = np.unravel_index(np.argmax(corr), corr.shape)
-            c = np.max(corr)
+            c = np.max(corr) / np.sum(synergies[k] ** 2)
             delays[n][k].append(ts)
+            amplitude[n][k].append(c)
 
             # Subtract the selected pattern
             data[n, ts:ts+synergy_length, :] -= c * synergies[k]
@@ -149,10 +150,7 @@ def match_synergies(data, synergies, n_synergy_use, refractory_period):
             t1 = min(ts + refractory_period, data_length)
             synergy_available[k, t0:t1] = False
 
-        for k in range(n_synergies):
-            delays[n][k].sort()
-
-    return delays
+    return delays, amplitude
 
 
 def update_delays(data, synergies):
