@@ -5,7 +5,7 @@ import timevarying
 
 
 def main():
-    trajectories = generate_dataset()
+    trajectories = generate_dataset(5)
     print(trajectories.shape)
 
     times = np.arange(trajectories.shape[1])
@@ -16,11 +16,12 @@ def main():
 
 def extract_tv(data, times):
     # Setup constants
-    N =  15  # Number of data
-    M =   3  # Number of DoF
+    N = data.shape[0]  # Number of data
+    M = data.shape[2]  # Number of DoF
     K =   3  # Number of synergies
-    S =  60  # Time length of synergies
-    n_iter = 2000
+    D =  10  # Number of synergies
+    S = 100  # Time length of synergies
+    n_iter = 100
 
     fig = plt.figure(constrained_layout=True)
     for m in range(M):
@@ -30,7 +31,7 @@ def extract_tv(data, times):
     plt.show()
 
     # Get synergies
-    model = timevarying.TimeVaryingSynergy(K, S, containing_negative_values=True, mu_w=5e-3, mu_c=5e-3)
+    model = timevarying.TimeVaryingSynergy(K, D, S, containing_negative_values=True, mu_w=5e-3, mu_c=5e-3)
     model.extract(data, max_iter=n_iter)
 
     # Reconstruct actions
@@ -68,19 +69,27 @@ def extract_tv(data, times):
     plt.show()
 
 
-def generate_dataset():
-    dataset = []
-    for i in range(15):
-        theta = np.pi / 4 * (i%5)
-        x = np.array([np.cos(theta), 0.0, np.sin(theta)]) * 0.2
-        data = reaching(x, 60)
+def generate_dataset(n_data):
+    trajectory_length = 600
+    reaching_length = 100
+    time_offset = 20
 
-        idx = np.random.randint(0, 40)
-        trajectory = np.zeros((100, 3))
-        trajectory[idx:idx+60, :] = data
-        dataset.append(trajectory)
+    # Initialize a dataset
+    trajectories = np.zeros((n_data, trajectory_length, 3))
 
-    trajectories = np.stack(dataset, axis=0)
+    for n in range(n_data):
+        idx = 0
+        for i in range(5):
+            # Generate a single reaching movement
+            theta = np.pi / 4 * (i%5)
+            x_goal = np.array([-np.cos(theta), 0.0, -np.sin(theta)]) * 0.2
+            x = reaching(x_goal, reaching_length)
+
+            # Add the reaching movement to the dataset
+            idx += np.random.randint(0, time_offset)
+            trajectories[n, idx:idx+reaching_length, :] = x
+
+            idx += reaching_length
 
     return trajectories
 
@@ -146,5 +155,4 @@ def example_reaching():
 
 
 if __name__ == "__main__":
-    #example_reaching()
     main()

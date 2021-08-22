@@ -5,7 +5,7 @@ import spatial, timevarying
 
 
 def main():
-    dirname = "data/dataset1"
+    dirname = "data/0519walk_yoko02_004_modified"
 
     trajectories = load_dataset(dirname)
     print(trajectories.shape)
@@ -90,8 +90,9 @@ def extract_tv(data, times):
     N = data.shape[0]  # Number of data
     M = data.shape[2]  # Number of DoF
     K =   3  # Number of synergies
+    D =  10
     S = 120  # Time length of synergies
-    n_iter = 10000
+    n_iter = 100
 
     fig = plt.figure(constrained_layout=True)
     for m in range(M):
@@ -101,7 +102,7 @@ def extract_tv(data, times):
     plt.show()
 
     # Get synergies
-    model = timevarying.TimeVaryingSynergy(K, S, containing_negative_values=True, mu_w=1e-3, mu_c=1e-3)
+    model = timevarying.TimeVaryingSynergy(K, D, S, containing_negative_values=True, mu_w=1e-3, mu_c=1e-3)
     model.extract(data, max_iter=n_iter)
 
     # Reconstruct actions
