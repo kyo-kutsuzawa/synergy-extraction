@@ -7,7 +7,7 @@ import timevarying
 def main():
     import argparse
 
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="Extract time-varying synergies from a dataset.")
     parser.add_argument("--dirname", type=str, default="data/dataset1/")
     parser.add_argument("--n_synergies", "-K", type=int, default=3, help="Number of synergies in a repertory")
     parser.add_argument("--n_synergy_use", "-D", type=int, default=10, help="Number of synergies used in a data")
