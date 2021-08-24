@@ -34,8 +34,8 @@ def example():
     N =  10  # Number of data
     M =   3  # Number of DoF
     T = 150  # Time length of data
-    K =   2  # Number of synergies
-    D =   4  # Number of synergies
+    K =   2  # Number of synergies in a repertory
+    D =   4  # Number of synergies used in a data
     S =  20  # Time length of synergies
     max_iter = 1000
 
