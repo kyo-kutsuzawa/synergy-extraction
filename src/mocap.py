@@ -111,6 +111,9 @@ def extract_tv(data, times):
     data_est = model.decode(activities)
     print(activities)
 
+    # Save extracted synergies and activities
+    save_synergies(model.synergies, activities, data.shape[1])
+
     # Create a figure
     fig = plt.figure(figsize=(12, 6), constrained_layout=True)
     gs_master = GridSpec(nrows=1, ncols=2, figure=fig, width_ratios=[2, 1])
@@ -138,6 +141,27 @@ def extract_tv(data, times):
         ax.set_xlim((0, model.synergies.shape[1]-1))
 
     plt.show()
+
+
+def save_synergies(synergies, activities, length):
+    import os
+
+    amplitude, delays = activities
+    N = len(amplitude)
+    K = synergies.shape[0]
+
+    for n in range(N):
+        data = np.zeros((length, K))
+
+        # Convert the activities
+        for k in range(K):
+            for ts, c in zip(delays[n][k], amplitude[n][k]):
+                data[ts, k] = c
+
+        # Save the data
+        os.makedirs("result", exist_ok=True)
+        filename = "result/activity{}.csv".format(n)
+        np.savetxt(filename, data, delimiter=",")
 
 
 if __name__ == "__main__":
