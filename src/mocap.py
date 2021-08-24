@@ -112,7 +112,7 @@ def extract_tv(data, times):
     print(activities)
 
     # Save extracted synergies and activities
-    save_synergies(model.synergies, activities, data.shape[1])
+    save_result(data, model.synergies, activities)
 
     # Create a figure
     fig = plt.figure(figsize=(12, 6), constrained_layout=True)
@@ -143,25 +143,32 @@ def extract_tv(data, times):
     plt.show()
 
 
-def save_synergies(synergies, activities, length):
+def save_result(data, synergies, activities):
     import os
 
     amplitude, delays = activities
     N = len(amplitude)
+    T = data.shape[1]
+    M = data.shape[2]
     K = synergies.shape[0]
 
+    # Save synergies
+    os.makedirs("result", exist_ok=True)
+    np.save("result/synergy.npy", synergies)
+
+    # Save data and activities
     for n in range(N):
-        data = np.zeros((length, K))
+        result = np.zeros((T, M + K))
+        result[:, 0:M] = data[n, :, :]
 
         # Convert the activities
         for k in range(K):
             for ts, c in zip(delays[n][k], amplitude[n][k]):
-                data[ts, k] = c
+                result[ts, M + k] = c
 
-        # Save the data
-        os.makedirs("result", exist_ok=True)
-        filename = "result/activity{}.csv".format(n)
-        np.savetxt(filename, data, delimiter=",")
+        # Save the result
+        filename = "result/data{}.csv".format(n)
+        np.savetxt(filename, result, delimiter=",")
 
 
 if __name__ == "__main__":
