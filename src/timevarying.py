@@ -1,12 +1,11 @@
 import numpy as np
-import tqdm
 
 
 class TimeVaryingSynergy:
     """Time-varying synergies.
     """
 
-    def __init__(self, n_synergies, synergy_length, containing_negative_values=False):
+    def __init__(self, n_synergies, n_synergy_use, synergy_length, containing_negative_values=False, mu_w=1e-3, mu_c=1e-3):
         """
         Args:
             n_synergies: Number of synergies
@@ -15,11 +14,16 @@ class TimeVaryingSynergy:
         self.synergy_length = synergy_length
         self.containing_negative_values = containing_negative_values
 
+        self.n_synergy_use = n_synergy_use
+        self.refractory_period = int(synergy_length * 0.5)
+
         # Initialize variables
         self.model = None
         self.synergies = None
         self.dof = None
         self.data_length = None
+        self.mu_w = mu_w
+        self.mu_c = mu_c
 
     def extract(self, data, max_iter=10000):
         """Extract time-varying synergies from given data.
@@ -36,17 +40,25 @@ class TimeVaryingSynergy:
             data = transform_nonnegative(data)
             self.dof = data.shape[2]  # Update the number of DoF
 
-        self.synergies = np.random.uniform(0.1, 1, (self.n_synergies, self.synergy_length, self.dof))
-        amplitude      = np.random.uniform(0.1, 1, (data.shape[0], self.n_synergies))
+        # Initialize synergies
+        data_mean = np.mean(data)
+        self.synergies = np.random.uniform(0.0, data_mean*2, (self.n_synergies, self.synergy_length, self.dof))
+        amplitude      = np.random.uniform(0.01, 1.0, (data.shape[0], self.n_synergies))
 
-        for i in tqdm.tqdm(range(max_iter)):
-            delays = update_delays(data, self.synergies)
-            amplitude = update_amplitude(data, self.synergies, amplitude, delays)
-            self.synergies = update_synergies(data, self.synergies, amplitude, delays)
+        # Extraction loop
+        for i in range(max_iter):
+            #delays = update_delays(data, self.synergies)
+            #amplitude = update_amplitude(data, self.synergies, amplitude, delays, self.mu_c)
+            delays, amplitude = match_synergies(data, self.synergies, self.n_synergy_use, self.refractory_period)
+            self.synergies = update_synergies(data, self.synergies, amplitude, delays, self.mu_w)
+
+            if i % 10 == 0:
+                r2 = compute_R2(data, self.synergies, amplitude, delays)
+                print("Iter {:4d}: R2 = {}".format(i, r2))
 
         return self.synergies
 
-    def encode(self, data, max_iter=1000):
+    def encode(self, data, max_iter=1000, mu_c=None):
         """Encode given data to synergy activities.
 
         Data is assumed to have the shape (#trajectories, data-length, #DoF).
@@ -60,11 +72,19 @@ class TimeVaryingSynergy:
         if self.containing_negative_values:
             data = transform_nonnegative(data)
 
+        if mu_c is None:
+            mu_c = self.mu_c
+
+        # Encoding loop
+        #amplitude = np.random.uniform(0.01, 1.0, size=(data.shape[0], self.n_synergies))
+        #for i in range(max_iter):
+        #    delays = update_delays(data, self.synergies)
+        #    amplitude = update_amplitude(data, self.synergies, amplitude, delays, mu_c)
+        #
+        #    print("Encoding... {}% ({}/{})".format(int(i/max_iter*100), i, max_iter), end="\r")
+
         # Encode the data
-        amplitude = np.empty((data.shape[0], self.n_synergies))
-        for i in range(max_iter):
-            delays = update_delays(data, self.synergies)
-            amplitude = update_amplitude(data, self.synergies, amplitude, delays)
+        delays, amplitude = match_synergies(data, self.synergies, self.n_synergy_use, self.refractory_period)
         activities = (amplitude, delays)
 
         return activities
@@ -81,18 +101,61 @@ class TimeVaryingSynergy:
 
         # Reconstruct data
         amplitude, delays = activities
-        data = np.zeros((activities[0].shape[0], self.data_length, self.dof))
+        data = np.zeros((len(amplitude), self.data_length, self.dof))
         for n in range(data.shape[0]):
             for k in range(self.n_synergies):
-                c = amplitude[n, k]
-                ts = delays[n, k]
-                data[n, ts:ts+self.synergy_length, :] += c * self.synergies[k, :, :]
+                for ts, c in zip(delays[n][k], amplitude[n][k]):
+                    data[n, ts:ts+self.synergy_length, :] += c * self.synergies[k, :, :]
 
         # Convert non-negative signals backwards
         if self.containing_negative_values:
             data = inverse_transform_nonnegative(data)
 
         return data
+
+
+def match_synergies(data, synergies, n_synergy_use, refractory_period):
+    """Find the delays and amplitude with matching pursuit.
+
+    The algorithm is based on [d'Avella et al., 2005].
+    """
+    # Setup variables
+    data = data.copy()
+    n_data = data.shape[0]
+    data_length = data.shape[1]
+    synergy_length = synergies.shape[1]
+    n_synergies = synergies.shape[0]
+
+    # Initialize delays
+    delays = [[[] for _ in range(n_synergies)] for _ in range(data.shape[0])]
+    amplitude = [[[] for _ in range(n_synergies)] for _ in range(data.shape[0])]
+
+    # Find delay times for each data sequence
+    for n in range(n_data):
+        synergy_available = np.full((n_synergies, data_length), True)  # Whether the delay time of the synergy has been found
+        for d in range(n_synergy_use):
+            # Compute dot products for all possible patterns
+            corr = np.zeros((n_synergies, data_length))  # Whether the delay time of the synergy has been found
+            for k in range(n_synergies):
+                for ts in range(data_length - synergy_length):
+                    if synergy_available[k, ts]:
+                        corr[k, ts] = np.sum(data[n, ts:ts+synergy_length, :] * synergies[k])
+
+            # Register the best-matching pattern
+            k, ts = np.unravel_index(np.argmax(corr), corr.shape)
+            c = np.max(corr) / np.sum(synergies[k] ** 2)
+            delays[n][k].append(ts)
+            amplitude[n][k].append(c)
+
+            # Subtract the selected pattern
+            data[n, ts:ts+synergy_length, :] -= c * synergies[k]
+
+            # Remove the selected pattern and its surroundings
+            t0 = max(ts - refractory_period, 0)
+            t1 = min(ts + refractory_period, data_length)
+            synergy_available[k, t0:t1] = False
+
+    return delays, amplitude
 
 
 def update_delays(data, synergies):
@@ -155,8 +218,7 @@ def update_amplitude(data, synergies, amplitude, delays, mu=0.001):
             data_est[n, ts:ts+synergies.shape[1], :] += synergies[k, :, :] * amplitude[n, k]
 
     # Compute the gradient
-    grad = np.einsum("ntm,ntmk->ntk", data - data_est, shifted_synergies)
-    grad = -2 * np.sum(grad, axis=1)
+    grad = -2 * np.einsum("ntm,ntmk->nk", data - data_est, shifted_synergies)
 
     # Update the amplitude
     amplitude = amplitude - mu * grad
@@ -170,12 +232,21 @@ def update_synergies(data, synergies, amplitude, delays, mu=0.001):
 
     The algorithm is based on [d'Avella and Tresch, 2002].
     """
+    # Compute reconstruction data
+    data_est = np.zeros_like(data)
+    for n in range(data.shape[0]):
+        for k in range(synergies.shape[0]):
+            for ts, c in zip(delays[n][k], amplitude[n][k]):
+                data_est[n, ts:ts+synergies.shape[1], :] += c * synergies[k, :, :]
+
     # Compute the gradient
+    deviation = data - data_est
     grad = np.zeros_like(synergies)
     for k in range(synergies.shape[0]):
         for n in range(data.shape[0]):
-            ts = delays[n, k]
-            grad[k, :, :] += (data[n, ts:ts+synergies.shape[1], :] - synergies[k, :, :] * amplitude[n, k]) * amplitude[n, k]
+            for ts, c in zip(delays[n][k], amplitude[n][k]):
+                data_est[n, ts:ts+synergies.shape[1], :] += c * synergies[k, :, :]
+                grad[k, :, :] += deviation[n, ts:ts+synergies.shape[1], :] * c
 
     # Compute the gradient
     grad = grad * -2
@@ -185,6 +256,21 @@ def update_synergies(data, synergies, amplitude, delays, mu=0.001):
     synergies = np.clip(synergies, 0.0, None)  # Limit to non-negative values
 
     return synergies
+
+
+def compute_R2(data, synergies, amplitude, delays):
+    # Compute reconstruction data
+    data_est = np.zeros_like(data)
+    for n in range(data.shape[0]):
+        for k in range(synergies.shape[0]):
+            for ts, c in zip(delays[n][k], amplitude[n][k]):
+                data_est[n, ts:ts+synergies.shape[1], :] += c * synergies[k, :, :]
+
+    # Compute the R2 value
+    data_mean = np.mean(data)
+    R2 = 1 - np.sum(np.square(data - data_est)) / np.sum(np.square(data - data_mean))
+
+    return R2
 
 
 def transform_nonnegative(data):
