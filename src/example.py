@@ -20,7 +20,7 @@ def example():
     lr = 0.005
     refractory_period = int(S * 0.5)
 
-    # Create a dataset with shape (N, T, M)
+    # Create a list of trajectories with shape (T, M)
     dataset, synergies, (amplitude, delays) = generate_example_data(N, M, T, K, D, S, plot=False)
 
     # Extract motor synergies
