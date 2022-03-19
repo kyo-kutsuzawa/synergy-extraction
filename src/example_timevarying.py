@@ -43,24 +43,24 @@ def example():
     dataset, synergies, (amplitude, delays) = generate_example_data(N, M, T, K, D, S, plot=False)
 
     # Initialize synergies
-    synergies = np.random.uniform(0.0, 1.0, (K, S, M))
+    synergies_est = np.random.uniform(0.0, 1.0, (K, S, M))
 
     # Extract motor synergies
-    n_synergies_use = 100
-    refractory_period = int(S * 0.5)
-    amplitude_threshold = 0.01
+    n_synergies_use = 50
+    refractory_period = int(S * 0.4)
+    amplitude_threshold = 0.001
     for i in range(n_iter):
-        delays, amplitude = timevarying.match_synergies(dataset, synergies, n_synergies_use, refractory_period, amplitude_threshold)
+        delays, amplitude = timevarying.match_synergies(dataset, synergies_est, n_synergies_use, refractory_period, amplitude_threshold)
 
-        r2 = timevarying.compute_R2(dataset, synergies, delays, amplitude)
+        r2 = timevarying.compute_R2(dataset, synergies_est, delays, amplitude)
         print("Iter {:4d}: R2 = {}".format(i, r2))
 
-        synergies = timevarying.update_synergies(dataset, synergies, delays, amplitude, lr)
+        synergies_est = timevarying.update_synergies(dataset, synergies_est, delays, amplitude, lr)
 
     # Reconstruct actions
-    activities = timevarying.match_synergies(dataset, synergies, n_synergies_use, refractory_period, amplitude_threshold)
+    activities = timevarying.match_synergies(dataset, synergies_est, n_synergies_use, refractory_period, amplitude_threshold)
     lengths = [d.shape[0] for d in dataset]
-    dataset_est = timevarying.decode(delays, amplitude, synergies, lengths)
+    dataset_est = timevarying.decode(delays, amplitude, synergies_est, lengths)
 
     # Create a figure
     fig = plt.figure(figsize=(12, 6), constrained_layout=True)
@@ -87,8 +87,8 @@ def example():
         ax = fig.add_subplot(gs_2[k, :])
         ax.set_title("synergy #{}".format(k+1))
         for m in range(M):
-            ax.plot(np.arange(synergies.shape[1]), synergies[k, :, m], "--", lw=2, color="C{}".format(m))
-            ax.plot(np.arange(synergies.shape[1]), synergies[k, :, m], lw=1, color="C{}".format(m))
+            ax.plot(np.arange(synergies.shape[1]),     synergies[k, :, m], "--", lw=2, color="C{}".format(m))
+            ax.plot(np.arange(synergies_est.shape[1]), synergies_est[k, :, m], lw=1, color="C{}".format(m))
         ax.set_xlim((0, synergies.shape[1]-1))
 
     plt.show()
