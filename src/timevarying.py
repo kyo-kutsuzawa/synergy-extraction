@@ -19,7 +19,7 @@ def match_synergies(dataset, synergies, n_synergy_use, refractory_period, amplit
     # Find delay times for each data sequence
     for n in range(n_data):
         residual = dataset[n].copy()
-        data_length = data.shape[0]
+        data_length = residual.shape[0]
 
         synergy_available = np.full((n_synergies, data_length), True)  # Whether the delay time of the synergy can be used
         for d in range(n_synergy_use):
