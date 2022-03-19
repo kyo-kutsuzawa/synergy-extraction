@@ -52,10 +52,10 @@ def example():
     for i in range(n_iter):
         delays, amplitude = timevarying.match_synergies(dataset, synergies, n_synergies_use, refractory_period, amplitude_threshold)
 
-        r2 = timevarying.compute_R2(dataset, synergies, amplitude, delays)
+        r2 = timevarying.compute_R2(dataset, synergies, delays, amplitude)
         print("Iter {:4d}: R2 = {}".format(i, r2))
 
-        synergies = timevarying.update_synergies(dataset, synergies, amplitude, delays, lr)
+        synergies = timevarying.update_synergies(dataset, synergies, delays, amplitude, lr)
 
     # Reconstruct actions
     activities = timevarying.match_synergies(dataset, synergies, n_synergies_use, refractory_period, amplitude_threshold)

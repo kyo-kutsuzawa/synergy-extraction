@@ -18,7 +18,7 @@ def match_synergies(dataset, synergies, n_synergy_use, refractory_period, amplit
 
     # Find delay times for each data sequence
     for n in range(n_data):
-        data = dataset[n].copy()
+        residual = dataset[n].copy()
         data_length = data.shape[0]
 
         synergy_available = np.full((n_synergies, data_length), True)  # Whether the delay time of the synergy can be used
@@ -28,7 +28,7 @@ def match_synergies(dataset, synergies, n_synergy_use, refractory_period, amplit
             for k in range(n_synergies):
                 for ts in range(data_length - synergy_length):
                     if synergy_available[k, ts]:
-                        corr[k, ts] = np.sum(data[ts:ts+synergy_length, :] * synergies[k])
+                        corr[k, ts] = np.sum(residual[ts:ts+synergy_length, :] * synergies[k])
 
             # Register the best-matching pattern
             k, ts = np.unravel_index(np.argmax(corr), corr.shape)
@@ -42,7 +42,7 @@ def match_synergies(dataset, synergies, n_synergy_use, refractory_period, amplit
             amplitude[n][k].append(c)
 
             # Subtract the selected pattern
-            data[ts:ts+synergy_length, :] -= c * synergies[k]
+            residual[ts:ts+synergy_length, :] -= c * synergies[k]
 
             # Remove the selected pattern and its surroundings
             t0 = max(ts - refractory_period, 0)
@@ -52,7 +52,7 @@ def match_synergies(dataset, synergies, n_synergy_use, refractory_period, amplit
     return delays, amplitude
 
 
-def update_synergies(dataset, synergies, amplitude, delays, mu=0.001):
+def update_synergies(dataset, synergies, delays, amplitude, mu=0.001):
     """
     Update synergies with gradient descent.
 
@@ -108,7 +108,7 @@ def decode(delays, amplitude, synergies, lengths):
     return dataset
 
 
-def compute_R2(dataset, synergies, amplitude, delays):
+def compute_R2(dataset, synergies, delays, amplitude):
     n_data = len(dataset)
 
     mse_sum = 0.0
@@ -133,7 +133,7 @@ def compute_R2(dataset, synergies, amplitude, delays):
     return R2
 
 
-def compute_mse(dataset, synergies, amplitude, delays):
+def compute_mse(dataset, synergies, delays, amplitude):
     n_data = len(dataset)
 
     mse_sum = 0.0
