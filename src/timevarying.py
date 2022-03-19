@@ -5,7 +5,7 @@ def match_synergies(dataset, synergies, n_synergy_use, refractory_period, amplit
     """
     Find the delays and amplitude with matching pursuit.
 
-    The algorithm is based on [d'Avella et al., 2005].
+    The algorithm is based on [d'Avella et al., 2005] but without the back-projection.
     """
     # Setup variables
     n_data = len(dataset)
