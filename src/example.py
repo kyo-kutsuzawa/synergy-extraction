@@ -18,29 +18,13 @@ def example():
     S =  20  # Time length of synergies
     n_iter = 100
     lr = 0.005
+    refractory_period = int(S * 0.5)
 
     # Create a dataset with shape (N, T, M)
     dataset, synergies, (amplitude, delays) = generate_example_data(N, M, T, K, D, S, plot=False)
 
-    # Initialize synergies
-    synergies_est = np.random.uniform(0.0, 1.0, (K, S, M))
-
     # Extract motor synergies
-    n_synergies_use = 50
-    refractory_period = int(S * 0.4)
-    amplitude_threshold = 0.001
-    for i in range(n_iter):
-        delays_est, amplitude_est = timevarying.match_synergies(dataset, synergies_est, n_synergies_use, refractory_period, amplitude_threshold)
-
-        r2 = timevarying.compute_R2(dataset, synergies_est, delays_est, amplitude_est)
-        print("Iter {:4d}: R2 = {}".format(i, r2))
-
-        synergies_est = timevarying.update_synergies(dataset, synergies_est, delays_est, amplitude_est, lr)
-
-    # Reconstruct actions
-    activities = timevarying.match_synergies(dataset, synergies_est, n_synergies_use, refractory_period, amplitude_threshold)
-    lengths = [d.shape[0] for d in dataset]
-    dataset_est = timevarying.decode(delays_est, amplitude_est, synergies_est, lengths)
+    synergies_est, delays_est, amplitude_est, dataset_rec = timevarying.extract(dataset, n_synergies=K, synergy_length=S, n_dof=M, n_iter=n_iter, lr=lr, refractory_period=refractory_period)
 
     # Create a figure
     fig = plt.figure(figsize=(12, 6), constrained_layout=True)
@@ -51,12 +35,12 @@ def example():
     axes = [fig.add_subplot(gs_1[m, :]) for m in range(M)]
     for n in range(N):
         data = dataset[n]
-        data_est = dataset_est[n]
+        data_rec = dataset_rec[n]
 
         for m, ax in enumerate(axes):
             ax.set_title("DoF #{}".format(m+1))
             ax.plot(np.arange(data.shape[0]), data[:, m], "--", lw=2, color="C{}".format(n))
-            ax.plot(np.arange(data.shape[0]), data_est[:, m],   lw=1, color="C{}".format(n))
+            ax.plot(np.arange(data.shape[0]), data_rec[:, m],   lw=1, color="C{}".format(n))
             ax.set_xlim((0, data.shape[0] - 1))
 
     # Plot synergy components

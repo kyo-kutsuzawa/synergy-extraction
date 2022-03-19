@@ -1,6 +1,27 @@
 import numpy as np
 
 
+def extract(dataset, n_synergies, synergy_length, n_dof, n_iter=100, lr=1e-3, refractory_period=10, n_synergies_use=100, amplitude_threshold=1e-2):
+    # Initialize synergies
+    synergies = np.random.uniform(0.0, 1.0, (n_synergies, synergy_length, n_dof))
+
+    # Extract motor synergies
+    for i in range(n_iter):
+        delays, amplitude = match_synergies(dataset, synergies, n_synergies_use, refractory_period, amplitude_threshold)
+
+        r2 = compute_R2(dataset, synergies, delays, amplitude)
+        print("Iter {:4d}: R2 = {}".format(i, r2))
+
+        synergies = update_synergies(dataset, synergies, delays, amplitude, lr)
+
+    # Reconstruct actions
+    lengths = [d.shape[0] for d in dataset]
+    delays, amplitude = match_synergies(dataset, synergies, n_synergies_use, refractory_period, amplitude_threshold)
+    dataset_rec = decode(delays, amplitude, synergies, lengths)
+
+    return synergies, delays, amplitude, dataset_rec
+
+
 def match_synergies(dataset, synergies, n_synergy_use, refractory_period, amplitude_threshold):
     """
     Find the delays and amplitude with matching pursuit.
