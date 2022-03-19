@@ -1,8 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
-from timevarying import TimeVaryingSynergy, match_synergies
-from timevarying import match_synergies, update_synergies
+import timevarying
 
 
 def main():
@@ -37,20 +36,31 @@ def example():
     K =   2  # Number of synergies in a repertory
     D =   4  # Number of synergies used in a data
     S =  20  # Time length of synergies
-    max_iter = 1000
+    n_iter = 100
+    lr = 0.001
 
     # Create a dataset with shape (N, T, M)
-    data, synergies, (amplitude, delays) = generate_example_data(N, M, T, K, D, S, plot=False)
-    #data += abs(np.random.normal(0, 0.1, size=data.shape))  # Add Gaussian noise
+    dataset, synergies, (amplitude, delays) = generate_example_data(N, M, T, K, D, S, plot=False)
 
-    # Get synergies
-    model = TimeVaryingSynergy(K, D, S)
-    model.extract(data, max_iter=max_iter)
+    # Initialize synergies
+    synergies = np.random.uniform(0.0, 1.0, (K, S, M))
+
+    # Extract motor synergies
+    n_synergies_use = 100
+    refractory_period = int(S * 0.5)
+    amplitude_threshold = 0.01
+    for i in range(n_iter):
+        delays, amplitude = timevarying.match_synergies(dataset, synergies, n_synergies_use, refractory_period, amplitude_threshold)
+
+        r2 = timevarying.compute_R2(dataset, synergies, amplitude, delays)
+        print("Iter {:4d}: R2 = {}".format(i, r2))
+
+        synergies = timevarying.update_synergies(dataset, synergies, amplitude, delays, lr)
 
     # Reconstruct actions
-    data_est = np.empty_like(data)
-    activities = model.encode(data, max_iter=max_iter)
-    data_est = model.decode(activities)
+    activities = timevarying.match_synergies(dataset, synergies, n_synergies_use, refractory_period, amplitude_threshold)
+    lengths = [d.shape[0] for d in dataset]
+    dataset_est = timevarying.decode(delays, amplitude, synergies, lengths)
 
     # Create a figure
     fig = plt.figure(figsize=(12, 6), constrained_layout=True)
@@ -62,11 +72,14 @@ def example():
     gs_1 = GridSpecFromSubplotSpec(nrows=M_row, ncols=M_col, subplot_spec=gs_master[0, 0])
     axes = [fig.add_subplot(gs_1[int(np.floor(m/M_col)), m%M_col]) for m in range(M)]
     for n in range(N):
+        data = dataset[n]
+        data_est = dataset_est[n]
+
         for m, ax in enumerate(axes):
             ax.set_title("DoF #{}".format(m+1))
-            ax.plot(np.arange(data.shape[1]), data[n, :, m], "--", lw=2, color="C{}".format(n))
-            ax.plot(np.arange(data.shape[1]), data_est[n, :, m],   lw=1, color="C{}".format(n))
-            ax.set_xlim((0, data.shape[1]-1))
+            ax.plot(np.arange(data.shape[0]), data[:, m], "--", lw=2, color="C{}".format(n))
+            ax.plot(np.arange(data.shape[0]), data_est[:, m],   lw=1, color="C{}".format(n))
+            ax.set_xlim((0, data.shape[0] - 1))
 
     # Plot synergy components
     gs_2 = GridSpecFromSubplotSpec(nrows=K, ncols=1, subplot_spec=gs_master[0, 1])
@@ -75,8 +88,8 @@ def example():
         ax.set_title("synergy #{}".format(k+1))
         for m in range(M):
             ax.plot(np.arange(synergies.shape[1]), synergies[k, :, m], "--", lw=2, color="C{}".format(m))
-            ax.plot(np.arange(model.synergies.shape[1]), model.synergies[k, :, m], lw=1, color="C{}".format(m))
-        ax.set_xlim((0, model.synergies.shape[1]-1))
+            ax.plot(np.arange(synergies.shape[1]), synergies[k, :, m], lw=1, color="C{}".format(m))
+        ax.set_xlim((0, synergies.shape[1]-1))
 
     plt.show()
 
@@ -113,13 +126,16 @@ def generate_example_data(N=3, M=3, T=100, K=3, D=4, S=15, plot=True):
     synergy_use = np.round(synergy_use).astype(np.int)
     synergy_use[:, -1] = D - np.sum(synergy_use[:, :-1], axis=1)
 
+    # Generate a dataset
+    lengths = [int(T * np.random.uniform(0.8, 1.5)) for n in range(N)]
+
     # Compute delays
     delays = []
     for n in range(N):
         delays.append([])
         for k in range(K):
             delays[n].append([])
-            margin = T - S * synergy_use[n, k] - refractory_period * (synergy_use[n, k] - 1)
+            margin = lengths[n] - S * synergy_use[n, k] - refractory_period * (synergy_use[n, k] - 1)
 
             if margin < 0:
                 return
@@ -145,11 +161,16 @@ def generate_example_data(N=3, M=3, T=100, K=3, D=4, S=15, plot=True):
                 amplitude[-1][-1].append(c)
 
     # Compute a dataset from the synergies and activities
-    data = np.zeros((N, T, M))
+    dataset = []
     for n in range(N):
+        data = np.zeros((lengths[n], M))
         for k in range(K):
             for ts, c in zip(delays[n][k], amplitude[n][k]):
-                data[n, ts:ts+S, :] += c * synergies[k, :, :]
+                data[ts:ts+S, :] += c * synergies[k, :, :]
+
+        data += abs(np.random.normal(0, 0.1, size=data.shape))  # Add Gaussian noise
+
+        dataset.append(data)
 
     # Plot results if specified
     if plot:
@@ -173,6 +194,7 @@ def generate_example_data(N=3, M=3, T=100, K=3, D=4, S=15, plot=True):
         fig.suptitle("Original data")
         axes = [fig.add_subplot(M, 1, m+1) for m in range(M)]
         for n in range(N):
+            data = dataset[n]
             for m, ax in enumerate(axes):
                 ax.plot(np.arange(data.shape[1]), data[n, :, m], "--", lw=2, color=plt.get_cmap("viridis")((N-n)/(N+1)))
                 ax.set_xlim((0, data.shape[1]-1))
@@ -181,7 +203,7 @@ def generate_example_data(N=3, M=3, T=100, K=3, D=4, S=15, plot=True):
 
         plt.show()
 
-    return data, synergies, (amplitude, delays)
+    return dataset, synergies, (amplitude, delays)
 
 
 def example_update_activation():
